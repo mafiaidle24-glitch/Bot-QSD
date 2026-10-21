@@ -4,7 +4,7 @@ const express = require('express');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Serve uma página Web/Dashboard simples
+// Servidor Web / Dashboard Simples
 app.get('/', (req, res) => {
   res.send(`
     <!DOCTYPE html>
@@ -32,7 +32,7 @@ app.listen(PORT, () => {
   console.log(`Servidor Web a rodar na porta ${PORT}`);
 });
 
-// Inicialização do Bot
+// Inicialização do Bot Discord
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -45,5 +45,18 @@ client.once('ready', () => {
   console.log(`Bot ligado com sucesso como: ${client.user.tag}`);
 });
 
-// Nunca coloques o token em texto limpo no código!
+// Escutar e responder às mensagens no chat
+client.on('messageCreate', (message) => {
+  // Ignora mensagens enviadas pelo próprio bot para evitar loops
+  if (message.author.bot) return;
+
+  // Exemplo de comando simples
+  if (message.content.toLowerCase() === '!ping') {
+    message.reply('Pong! 🏓 O BOT QSD está funcional!');
+  } else if (message.content.toLowerCase() === 'oi' || message.content.toLowerCase() === 'olá') {
+    message.reply(`Olá, ${message.author.username}! Como posso ajudar?`);
+  }
+});
+
+// Login seguro usando a variável de ambiente do Bot-Hosting.net
 client.login(process.env.TOKEN);
