@@ -2,7 +2,9 @@ const { Client, GatewayIntentBits } = require('discord.js');
 const express = require('express');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+
+// O Bot-Hosting fornece a porta através da variável SERVER_PORT ou PORT
+const PORT = process.env.SERVER_PORT || process.env.PORT || 3000;
 
 // Servidor Web / Dashboard Simples
 app.get('/', (req, res) => {
@@ -28,7 +30,8 @@ app.get('/', (req, res) => {
   `);
 });
 
-app.listen(PORT, () => {
+// É necessário escutar em '0.0.0.0' para o Bot-Hosting conseguir reencaminhar o tráfego
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`Servidor Web a rodar na porta ${PORT}`);
 });
 
@@ -47,10 +50,8 @@ client.once('ready', () => {
 
 // Escutar e responder às mensagens no chat
 client.on('messageCreate', (message) => {
-  // Ignora mensagens enviadas pelo próprio bot para evitar loops
   if (message.author.bot) return;
 
-  // Exemplo de comando simples
   if (message.content.toLowerCase() === '!ping') {
     message.reply('Pong! 🏓 O BOT QSD está funcional!');
   } else if (message.content.toLowerCase() === 'oi' || message.content.toLowerCase() === 'olá') {
@@ -58,5 +59,5 @@ client.on('messageCreate', (message) => {
   }
 });
 
-// Login seguro usando a variável de ambiente do Bot-Hosting.net
+// Login seguro usando a variável de ambiente
 client.login(process.env.TOKEN);
