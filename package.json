@@ -1,14 +1,20 @@
 {
-  "name": "bot-qsd",
-  "version": "2.0.0",
-  "description": "Bot QSD Completo com Painel Web",
+  "name": "qsd-bot",
+  "version": "1.0.0",
+  "description": "Bot de Discord com painel web: boas-vindas, saída, cargos por botão, níveis, comandos, interação, tradução e mini jogos.",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
+  "engines": {
+    "node": ">=18.17"
+  },
   "dependencies": {
-    "discord.js": "^14.14.1",
-    "express": "^4.18.2",
-    "@vitalets/google-translate-api": "^9.2.0"
+    "@napi-rs/canvas": "^0.1.65",
+    "discord.js": "^14.16.3",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.1",
+    "express-rate-limit": "^7.4.1",
+    "express-session": "^1.18.1"
   }
 }
