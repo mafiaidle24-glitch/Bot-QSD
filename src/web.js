@@ -42,11 +42,17 @@ function startWeb(bot) {
   app.use('/api', rateLimit({ windowMs: 60_000, limit: 150, standardHeaders: true, legacyHeaders: false }));
   const previewLimit = rateLimit({ windowMs: 60_000, limit: 30, standardHeaders: true, legacyHeaders: false });
 
-  const wrap = (fn) => (req, res) =>
-    Promise.resolve(fn(req, res)).catch((e) => {
+  // ===== CORRIGIDO AQUI =====
+  const wrap = (fn) => (req, res, next) =>
+    Promise.resolve(fn(req, res, next)).catch((e) => {
       console.error('[web]', e);
-      res.status(500).json({ error: e.message || 'Erro interno' });
+      if (!res.headersSent) {
+        res.status(500).json({ error: e.message || 'Erro interno' });
+      } else {
+        next(e);
+      }
     });
+  // ==========================
 
   /* ------------------------------ login ------------------------------ */
 
@@ -144,7 +150,7 @@ function startWeb(bot) {
       .map((g) => ({
         id: g.id,
         name: g.name,
-        icon: g.icon ? `https://cdn.discordapp.com/icons/${g.id}/${g.icon}.png?size=64` : null,
+        icon: g.icon ? `https://cdn.discordapp.com/icons/\( {g.id}/ \){g.icon}.png?size=64` : null,
         botIn: client.guilds.cache.has(g.id),
         invite: inviteUrl(g.id),
       }))
