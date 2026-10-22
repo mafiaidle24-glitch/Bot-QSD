@@ -1,1 +1,536 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Painel do Bot</title>
+<style>
+:root{
+  --bg:#18181c; --panel:#232428; --panel2:#1e1f22; --line:#33353b; --text:#f2f3f5; --muted:#9a9ea6;
+  --blue:#5865f2; --gray:#26272c; --green:#008545; --red:#d12d3d; --accent:#5865f2;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);font:15px/1.45 "Segoe UI",system-ui,-apple-system,sans-serif}
+a{color:#8ea1ff}
+button,input,select,textarea{font:inherit;color:inherit}
+header.top{display:flex;align-items:center;gap:12px;padding:12px 20px;background:var(--panel2);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
+header.top .brand{font-weight:700;font-size:17px}
+header.top .sp{flex:1}
+header.top img{width:30px;height:30px;border-radius:50%}
+.wrap{max-width:1000px;margin:0 auto;padding:22px 16px 120px}
+.center{min-height:70vh;display:grid;place-items:center;text-align:center}
+.btn{background:var(--blue);border:0;border-radius:8px;padding:9px 16px;cursor:pointer;font-weight:600;text-decoration:none;display:inline-block;color:#fff}
+.btn:hover{filter:brightness(1.1)}
+.btn.ghost{background:transparent;border:1px solid var(--line);color:var(--text)}
+.btn.danger{background:var(--red)}
+.btn.green{background:var(--green)}
+.btn.small{padding:5px 10px;font-size:13px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px}
+.gcard{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;display:flex;align-items:center;gap:12px}
+.gcard img,.gcard .ph{width:46px;height:46px;border-radius:50%;background:var(--gray);flex:none;display:grid;place-items:center;font-weight:700}
+.gcard .nm{flex:1;min-width:0;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+nav.tabs{display:flex;gap:6px;flex-wrap:wrap;margin:14px 0 18px}
+nav.tabs button{background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:7px 14px;cursor:pointer}
+nav.tabs button.on{background:var(--blue);border-color:var(--blue);font-weight:600}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:16px}
+.card h3{margin:0 0 4px;font-size:16px}
+.card>p.sub{margin:0 0 12px;color:var(--muted);font-size:13px}
+.row{display:flex;gap:12px;flex-wrap:wrap}
+.row>*{flex:1 1 220px}
+.field{display:flex;flex-direction:column;gap:5px;margin:10px 0}
+.field .lbl{font-size:12px;font-weight:700;color:#b5bac1;text-transform:uppercase;letter-spacing:.03em}
+.field small{color:var(--muted)}
+input[type=text],input[type=number],input[type=url],select,textarea{width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px 10px;outline:none}
+input:focus,select:focus,textarea:focus{border-color:var(--blue)}
+input[type=color]{width:100%;height:38px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:3px}
+textarea{resize:vertical;min-height:80px}
+.chk{display:flex;align-items:center;gap:8px;margin:10px 0;cursor:pointer}
+.chk input{width:18px;height:18px;accent-color:var(--blue)}
+.mbar{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.mbar select{width:auto;flex:1 1 140px;font-size:13px;padding:5px 8px}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px}
+.chip{background:var(--gray);border:1px solid var(--line);border-radius:999px;padding:3px 6px 3px 10px;font-size:13px;display:flex;gap:6px;align-items:center}
+.chip button{background:none;border:0;cursor:pointer;color:var(--muted);font-size:15px;line-height:1}
+.item{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:12px;margin:10px 0;position:relative}
+.item .x{position:absolute;top:8px;right:8px}
+.dpreview{background:#2b2d31;border-radius:10px;padding:14px;display:flex;gap:12px;margin:10px 0}
+.dpreview .av{width:42px;height:42px;border-radius:50%;flex:none}
+.dpreview .nm{font-weight:600}
+.dpreview .tag{background:var(--blue);border-radius:4px;font-size:11px;padding:1px 5px;margin-left:6px;vertical-align:middle}
+.dpreview .body{white-space:pre-wrap;word-break:break-word;margin-top:2px}
+.dpreview img.prev{max-width:100%;border-radius:10px;margin-top:8px;display:block}
+.men{background:rgba(88,101,242,.3);color:#c9d0ff;border-radius:4px;padding:0 3px}
+.dbtns{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.dbtn{border-radius:8px;padding:8px 14px;font-weight:600;color:#fff;border:1px solid rgba(255,255,255,.08)}
+.dbtn.s1{background:var(--blue)} .dbtn.s2{background:var(--gray)} .dbtn.s3{background:var(--green)} .dbtn.s4{background:var(--red)}
+#savebar{position:fixed;left:0;right:0;bottom:-80px;background:var(--panel2);border-top:1px solid var(--line);padding:12px 20px;display:flex;gap:12px;align-items:center;justify-content:center;transition:bottom .2s;z-index:9}
+#savebar.show{bottom:0}
+#toast{position:fixed;top:70px;right:16px;display:flex;flex-direction:column;gap:8px;z-index:20}
+.t{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--blue);padding:10px 14px;border-radius:8px;max-width:340px}
+.t.err{border-left-color:var(--red)} .t.ok{border-left-color:var(--green)}
+.warn{background:#3b2f1a;border:1px solid #6b5420;border-radius:10px;padding:10px 14px;margin-bottom:14px}
+code{background:var(--panel2);border-radius:4px;padding:1px 5px}
+ul.cl{padding-left:18px;margin:6px 0} ul.cl li{margin:3px 0}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="toast"></div>
+<script>
+const $ = (s, r = document) => r.querySelector(s);
+function h(tag, attrs, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (v == null || v === false) continue;
+    if (k === 'class') e.className = v;
+    else if (k.startsWith('on')) e.addEventListener(k.slice(2), v);
+    else if (k === 'value') e.value = v;
+    else if (k === 'checked') e.checked = !!v;
+    else if (k === 'selected') e.selected = !!v;
+    else e.setAttribute(k, v === true ? '' : v);
+  }
+  for (const kid of kids.flat(Infinity)) {
+    if (kid == null || kid === false) continue;
+    e.append(kid.nodeType ? kid : document.createTextNode(String(kid)));
+  }
+  return e;
+}
+function toast(msg, type = '') {
+  const t = h('div', { class: 't ' + type }, msg);
+  $('#toast').append(t);
+  setTimeout(() => t.remove(), 4500);
+}
+async function api(path, opts = {}) {
+  const r = await fetch(path, { credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, ...opts,
+    body: opts.body ? JSON.stringify(opts.body) : undefined });
+  if (r.status === 401) { st.me = null; render(); throw new Error('Sessão expirada. Entre de novo.'); }
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || 'Erro ' + r.status);
+  return j;
+}
 
+const st = { me: null, bot: null, langs: [], guilds: [], gid: null, data: null, cfg: null, tab: 'home', dirty: false, onChange: null };
+
+/* ---------- helpers de formulário ---------- */
+let t0;
+function dirty() {
+  st.dirty = true;
+  $('#savebar')?.classList.add('show');
+  clearTimeout(t0);
+  if (st.onChange) t0 = setTimeout(st.onChange, 700);
+}
+const chOpts = () => st.data.channels.map((c) => ({ v: c.id, t: '#' + c.name }));
+const roleOpts = () => st.data.roles.map((r) => ({ v: r.id, t: '@' + r.name + (r.assignable ? '' : '  (acima do bot)') }));
+const roleName = (id) => st.data.roles.find((r) => r.id === id)?.name || '(cargo removido)';
+const chanName = (id) => st.data.channels.find((c) => c.id === id)?.name || '(canal removido)';
+
+function field(label, ctrl, hint) {
+  return h('label', { class: 'field' }, h('span', { class: 'lbl' }, label), ctrl, hint ? h('small', {}, hint) : null);
+}
+function tInput(o, k, { ph = '', max } = {}) {
+  return h('input', { type: 'text', value: o[k] ?? '', placeholder: ph, maxlength: max, oninput: (e) => { o[k] = e.target.value; dirty(); } });
+}
+function nInput(o, k, min, max, step = 1) {
+  return h('input', { type: 'number', value: o[k], min, max, step, oninput: (e) => { o[k] = e.target.value === '' ? '' : Number(e.target.value); dirty(); } });
+}
+function cInput(o, k) {
+  return h('input', { type: 'color', value: o[k] || '#ffffff', oninput: (e) => { o[k] = e.target.value; dirty(); } });
+}
+function chk(o, k, label) {
+  return h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: !!o[k], onchange: (e) => { o[k] = e.target.checked; dirty(); } }), label);
+}
+function sel(o, k, options, { empty = '— escolher —', num = false } = {}) {
+  const s = h('select', { onchange: (e) => { o[k] = num ? Number(e.target.value) : e.target.value; dirty(); } },
+    empty != null ? h('option', { value: '' }, empty) : null,
+    options.map((x) => h('option', { value: x.v, selected: String(o[k]) === String(x.v) }, x.t)));
+  return s;
+}
+function tArea(o, k, { rows = 4, max = 2000, tools = true } = {}) {
+  const ta = h('textarea', { rows, maxlength: max, oninput: (e) => { o[k] = e.target.value; dirty(); } });
+  ta.value = o[k] ?? '';
+  if (!tools) return ta;
+  const insert = (text) => {
+    const a = ta.selectionStart ?? ta.value.length, b = ta.selectionEnd ?? a;
+    ta.value = ta.value.slice(0, a) + text + ta.value.slice(b);
+    ta.focus(); ta.selectionStart = ta.selectionEnd = a + text.length;
+    o[k] = ta.value; dirty();
+  };
+  const mk = (ph, opts, fn) => {
+    const s = h('select', { onchange: (e) => { if (e.target.value) fn(e.target.value); e.target.value = ''; } },
+      h('option', { value: '' }, ph), opts.map((x) => h('option', { value: x.v }, x.t)));
+    return s;
+  };
+  const vars = ['{user}', '{username}', '{server}', '{count}', '{level}', '{args}'].map((v) => ({ v, t: v }));
+  return h('div', {}, ta, h('div', { class: 'mbar' },
+    mk('+ variável', vars, insert),
+    mk('+ mencionar cargo', st.data.roles.map((r) => ({ v: r.id, t: '@' + r.name })), (id) => insert(`<@&${id}>`)),
+    mk('+ mencionar canal', st.data.channels.map((c) => ({ v: c.id, t: '#' + c.name })), (id) => insert(`<#${id}>`))));
+}
+/** Seleção múltipla em "chips". */
+function multi(o, k, options, { label = 'adicionar…' } = {}) {
+  const box = h('div');
+  const nameOf = (v) => options.find((x) => x.v === v)?.t || v;
+  const draw = () => {
+    box.replaceChildren(
+      h('div', { class: 'chips' }, (o[k] || []).map((v, i) =>
+        h('span', { class: 'chip' }, nameOf(v), h('button', { onclick: () => { o[k].splice(i, 1); dirty(); draw(); } }, '×')))),
+      h('select', { onchange: (e) => { const v = e.target.value; if (v && !o[k].includes(v)) { o[k].push(v); dirty(); } draw(); } },
+        h('option', { value: '' }, '+ ' + label), options.filter((x) => !(o[k] || []).includes(x.v)).map((x) => h('option', { value: x.v }, x.t))));
+  };
+  draw();
+  return box;
+}
+function listEditor(arr, makeItem, row, addLabel, max = 100) {
+  const box = h('div');
+  const draw = () => {
+    box.replaceChildren(
+      arr.map((it, i) => h('div', { class: 'item' },
+        h('button', { class: 'btn danger small x', onclick: () => { arr.splice(i, 1); dirty(); draw(); } }, 'Remover'),
+        row(it, i, draw))),
+      arr.length < max ? h('button', { class: 'btn ghost', onclick: () => { arr.push(makeItem()); dirty(); draw(); } }, '+ ' + addLabel) : null);
+  };
+  draw();
+  return box;
+}
+const card = (title, sub, ...kids) => h('div', { class: 'card' }, h('h3', {}, title), sub ? h('p', { class: 'sub' }, sub) : null, ...kids);
+
+/* ---------- prévia estilo Discord ---------- */
+function discordText(text, sample = {}) {
+  const out = [];
+  const vars = { '{user}': '@' + (st.me.user.username), '{username}': st.me.user.username, '{server}': st.data.guild.name,
+    '{count}': '123', '{level}': '5', '{args}': 'argumento', '{displayname}': st.me.user.username, '{id}': st.me.user.id, '{channel}': '#canal', ...sample };
+  const t = String(text || '').replace(/\{(user|username|displayname|server|count|level|args|id|channel)\}/gi, (m) => vars[m.toLowerCase()] ?? m);
+  const re = /(<@&(\d+)>|<#(\d+)>|\*\*(.+?)\*\*)/g;
+  let last = 0, m;
+  while ((m = re.exec(t))) {
+    if (m.index > last) out.push(t.slice(last, m.index));
+    if (m[2]) { const r = st.data.roles.find((x) => x.id === m[2]); out.push(h('span', { class: 'men', style: r?.color ? `color:${r.color}` : '' }, '@' + (r?.name || 'cargo'))); }
+    else if (m[3]) out.push(h('span', { class: 'men' }, '#' + chanName(m[3])));
+    else out.push(h('b', {}, m[4]));
+    last = re.lastIndex;
+  }
+  if (last < t.length) out.push(t.slice(last));
+  return out;
+}
+function msgPreview(text, imgEl) {
+  return h('div', { class: 'dpreview' },
+    h('img', { class: 'av', src: st.bot.avatar, alt: '' }),
+    h('div', { style: 'min-width:0;flex:1' },
+      h('div', {}, h('span', { class: 'nm' }, st.bot.username), h('span', { class: 'tag' }, '✓ APP')),
+      h('div', { class: 'body' }, discordText(text)), imgEl));
+}
+
+/* ---------- abas ---------- */
+const TABS = [
+  ['home', '🏠 Início'], ['welcome', '👋 Boas-vindas'], ['leave', '🚪 Saída'], ['roles', '🎛️ Cargos / Botões'],
+  ['levels', '⭐ Rank / Níveis'], ['commands', '⌨️ Comandos'], ['interaction', '💬 Interação'],
+  ['translate', '🌐 Tradução'], ['games', '🎮 Mini jogos'],
+];
+
+function tabHome() {
+  return h('div', {},
+    !st.data.botCanManageRoles ? h('div', { class: 'warn' }, '⚠️ O bot não tem a permissão ', h('b', {}, 'Gerenciar Cargos'), ' neste servidor. Os botões de cargo e as recompensas de nível não vão funcionar até você dar essa permissão (e deixar o cargo do bot acima dos cargos que ele vai entregar).') : null,
+    card('Como usar', 'Escolha uma aba acima, ajuste e clique em "Salvar alterações" (barra que aparece embaixo).',
+      h('ul', { class: 'cl' },
+        h('li', {}, '👋 ', h('b', {}, 'Boas-vindas / Saída'), ': mensagem + imagem com a foto do membro, igual ao seu modelo.'),
+        h('li', {}, '🎛️ ', h('b', {}, 'Cargos / Botões'), ': monte painéis com botões coloridos e publique no canal.'),
+        h('li', {}, '⭐ ', h('b', {}, 'Rank / Níveis'), ': XP por mensagem, anúncio de nível e cargos de recompensa.'),
+        h('li', {}, '⌨️ ', h('b', {}, 'Comandos'), ': crie comandos como ', h('code', {}, '!regras'), ' sem programar.'),
+        h('li', {}, '💬 ', h('b', {}, 'Interação'), ': respostas e reações automáticas a palavras.'),
+        h('li', {}, '🌐 ', h('b', {}, 'Tradução'), ': traduz canais automaticamente e por reação de bandeira.'),
+        h('li', {}, '🎮 ', h('b', {}, 'Mini jogos'), ': quiz, pedra-papel-tesoura, adivinhar número e mais.'))),
+    card('Comandos de barra do bot', null,
+      h('ul', { class: 'cl' },
+        ['/rank', '/top', '/traduzir', '/dado', '/moeda', '/ppt', '/quiz', '/adivinhar', '/piada', '/fato', '/abracar', '/bola8', '/painel']
+          .map((c) => h('li', {}, h('code', {}, c))))),
+    card('Variáveis para mensagens', null,
+      h('p', {}, h('code', {}, '{user}'), ' menciona o membro • ', h('code', {}, '{username}'), ' nome • ', h('code', {}, '{server}'), ' nome do servidor • ',
+        h('code', {}, '{count}'), ' nº de membros • ', h('code', {}, '{level}'), ' nível (só em níveis) • ', h('code', {}, '{args}'), ' texto depois do comando • ',
+        h('code', {}, '{channel}'), ' canal atual.'),
+      h('p', {}, 'Para marcar cargos e canais, use os seletores "+ mencionar" embaixo das caixas de texto.')));
+}
+
+function tabCard(kind) {
+  const c = st.cfg[kind];
+  const isW = kind === 'welcome';
+  const img = h('img', { class: 'prev', alt: 'prévia' });
+  const wrap = h('div');
+  const refresh = async () => {
+    if (!c.useImage) { img.removeAttribute('src'); img.style.display = 'none'; return; }
+    img.style.display = '';
+    try {
+      const r = await fetch(`/api/guilds/${st.gid}/preview/${kind}`, { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(c) });
+      if (!r.ok) throw new Error((await r.json()).error || 'Erro na prévia');
+      const old = img.src; img.src = URL.createObjectURL(await r.blob()); if (old.startsWith('blob:')) URL.revokeObjectURL(old);
+    } catch (e) { toast(e.message, 'err'); }
+  };
+  const textPrev = h('div');
+  const drawText = () => textPrev.replaceChildren(msgPreview(c.message, img));
+  st.onChange = () => { drawText(); refresh(); };
+  drawText(); refresh();
+
+  const test = async () => {
+    try {
+      if (st.dirty) await save();
+      await api(`/api/guilds/${st.gid}/test/${kind}`, { method: 'POST' });
+      toast('Mensagem de teste enviada no canal!', 'ok');
+    } catch (e) { toast(e.message, 'err'); }
+  };
+
+  wrap.append(
+    card(isW ? 'Mensagem de boas-vindas' : 'Mensagem de saída', 'Enviada quando alguém ' + (isW ? 'entra no' : 'sai do') + ' servidor.',
+      chk(c, 'enabled', 'Ativar'),
+      field('Canal', sel(c, 'channelId', chOpts())),
+      field('Texto da mensagem', tArea(c, 'message', { rows: 5 }), 'Aceita **negrito**, variáveis e menções de cargo/canal.'),
+      chk(c, 'useImage', 'Enviar imagem com a foto do membro')),
+    card('Imagem', 'Personalize o cartão. A prévia atualiza sozinha.',
+      field('Fundo (link de imagem, opcional)', tInput(c, 'bgUrl', { ph: 'https://…/imagem.png (vazio = fundo padrão)', max: 500 }), 'Use um link direto para .png/.jpg. Ideal: proporção 2:1 (ex.: 1024×500).'),
+      h('div', { class: 'row' },
+        field('Título', tInput(c, 'title', { max: 40 })),
+        field('Subtítulo', tInput(c, 'subtitle', { max: 70 }))),
+      h('div', { class: 'row' },
+        field('Cor da borda da foto', cInput(c, 'accent')), field('Cor do título', cInput(c, 'titleColor')),
+        field('Cor do nome', cInput(c, 'nameColor')), field('Cor do subtítulo', cInput(c, 'subtitleColor'))),
+      h('p', { class: 'sub' }, 'Emojis não aparecem dentro da imagem (só no texto da mensagem).')),
+    isW ? card('Extras', null,
+      field('Cargos automáticos ao entrar', multi(c, 'autoRoleIds', roleOpts(), { label: 'adicionar cargo' })),
+      chk(c, 'dmEnabled', 'Enviar mensagem privada (DM) ao novo membro'),
+      field('Texto da DM', tArea(c, 'dmMessage', { rows: 3 }))) : null,
+    card('Prévia', 'É assim que vai aparecer no Discord (com a sua foto de exemplo).', textPrev,
+      h('div', { class: 'dbtns' },
+        h('button', { class: 'btn ghost', onclick: () => { drawText(); refresh(); } }, '🔄 Atualizar prévia'),
+        h('button', { class: 'btn green', onclick: test }, '📨 Enviar teste no canal'))));
+  return wrap;
+}
+
+function tabRoles() {
+  const panels = st.cfg.panels;
+  const box = h('div');
+  const STY = [{ v: 1, t: '🔵 Azul' }, { v: 2, t: '⚫ Cinza' }, { v: 3, t: '🟢 Verde' }, { v: 4, t: '🔴 Vermelho' }];
+  const draw = () => {
+    box.replaceChildren(
+      !st.data.botCanManageRoles ? h('div', { class: 'warn' }, '⚠️ O bot precisa da permissão "Gerenciar Cargos".') : null,
+      panels.map((p, pi) => {
+        const prev = h('div', { class: 'dbtns' });
+        const drawPrev = () => prev.replaceChildren(p.buttons.map((b) =>
+          h('span', { class: 'dbtn s' + b.style }, [b.emoji, b.label || roleName(b.roleId)].filter(Boolean).join(' '))));
+        drawPrev();
+        const btns = h('div');
+        const drawBtns = () => btns.replaceChildren(
+          p.buttons.map((b, bi) => h('div', { class: 'item' },
+            h('div', { class: 'row' },
+              field('Cargo', sel(b, 'roleId', roleOpts(), { empty: '— cargo —' })),
+              field('Texto do botão', tInput(b, 'label', { ph: 'ex.: Gamer', max: 80 })),
+              field('Emoji (opcional)', tInput(b, 'emoji', { ph: '🎮', max: 64 })),
+              field('Cor', sel(b, 'style', STY, { empty: null, num: true }))),
+            h('button', { class: 'btn danger small', onclick: () => { p.buttons.splice(bi, 1); dirty(); drawBtns(); drawPrev(); } }, 'Remover botão'))),
+          p.buttons.length < 25 ? h('button', { class: 'btn ghost', onclick: () => { p.buttons.push({ roleId: '', label: '', emoji: '', style: (p.buttons.length % 4) + 1 }); dirty(); drawBtns(); } }, '+ Adicionar botão') : null);
+        drawBtns();
+        const onAnyChange = () => drawPrev();
+        btns.addEventListener('input', onAnyChange); btns.addEventListener('change', onAnyChange);
+
+        const publish = async () => {
+          try {
+            await save();
+            const r = await api(`/api/guilds/${st.gid}/panels/${p.id}/publish`, { method: 'POST' });
+            toast('Painel publicado no Discord!', 'ok');
+            await reloadData(false);
+          } catch (e) { toast(e.message, 'err'); }
+        };
+        return h('div', { class: 'card' },
+          h('h3', {}, '🎛️ ' + (p.name || 'Painel')),
+          h('div', { class: 'row' },
+            field('Nome interno', tInput(p, 'name', { max: 60 })),
+            field('Canal onde publicar', sel(p, 'channelId', chOpts())),
+            field('Modo', sel(p, 'mode', [{ v: 'toggle', t: 'Vários cargos (clicar liga/desliga)' }, { v: 'single', t: 'Escolha única (troca o cargo)' }], { empty: null }))),
+          chk(p, 'useEmbed', 'Usar caixa (embed) colorida'),
+          h('div', { class: 'row' },
+            field('Título (só embed)', tInput(p, 'title', { max: 256 })),
+            field('Cor do embed', cInput(p, 'color'))),
+          field('Texto da mensagem', tArea(p, 'content', { rows: 3 })),
+          h('div', { class: 'lbl', style: 'margin-top:10px;font-size:12px;font-weight:700;color:#b5bac1' }, 'BOTÕES'),
+          btns,
+          h('div', { class: 'lbl', style: 'margin-top:12px;font-size:12px;font-weight:700;color:#b5bac1' }, 'PRÉVIA DOS BOTÕES'),
+          prev,
+          h('div', { class: 'dbtns', style: 'margin-top:14px' },
+            h('button', { class: 'btn green', onclick: publish }, p.messageId ? '🔄 Atualizar mensagem no Discord' : '📤 Publicar no Discord'),
+            h('button', { class: 'btn danger', onclick: () => { if (confirm('Remover este painel? (a mensagem já publicada continua no Discord, mas os botões deixam de funcionar)')) { panels.splice(pi, 1); dirty(); draw(); } } }, 'Remover painel')));
+      }),
+      panels.length < 20 ? h('button', { class: 'btn', onclick: () => {
+        panels.push({ id: Math.random().toString(36).slice(2, 10), name: 'Painel ' + (panels.length + 1), channelId: '', messageId: '', useEmbed: true, title: 'Escolha seus cargos', content: 'Clique nos botões abaixo para pegar ou remover um cargo.', color: '#5865f2', mode: 'toggle', buttons: [] });
+        dirty(); draw();
+      } }, '+ Novo painel de cargos') : null);
+  };
+  draw();
+  return box;
+}
+
+function tabLevels() {
+  const l = st.cfg.levels;
+  return h('div', {},
+    card('Sistema de níveis', 'Cada mensagem (respeitando o intervalo) rende XP aleatório. Use /rank e /top no Discord.',
+      chk(l, 'enabled', 'Ativar níveis'),
+      h('div', { class: 'row' },
+        field('XP mínimo', nInput(l, 'xpMin', 1, 500)), field('XP máximo', nInput(l, 'xpMax', 1, 1000)),
+        field('Intervalo entre ganhos (s)', nInput(l, 'cooldown', 0, 3600)), field('Multiplicador de XP', nInput(l, 'multiplier', 0.1, 10, 0.1))),
+      h('div', { class: 'row' },
+        field('Aviso de novo nível', sel(l, 'announce', [{ v: 'same', t: 'No mesmo canal da conversa' }, { v: 'channel', t: 'Em um canal específico' }, { v: 'off', t: 'Não avisar' }], { empty: null })),
+        field('Canal dos avisos', sel(l, 'channelId', chOpts()))),
+      field('Mensagem de novo nível', tArea(l, 'message', { rows: 2, max: 500 }), 'Use {user} e {level}.')),
+    card('Recompensas por nível', 'Ao chegar no nível, o membro ganha o cargo.',
+      chk(l, 'stackRewards', 'Acumular cargos (desmarcado = mantém só o cargo do maior nível)'),
+      listEditor(l.rewards, () => ({ level: 5, roleId: '' }), (r) => h('div', { class: 'row' },
+        field('Nível', nInput(r, 'level', 1, 1000)), field('Cargo', sel(r, 'roleId', roleOpts()))), 'Adicionar recompensa', 30)),
+    card('Ignorar', 'Onde ou quem não ganha XP.',
+      field('Canais ignorados', multi(l, 'ignoredChannels', chOpts(), { label: 'adicionar canal' })),
+      field('Cargos ignorados', multi(l, 'ignoredRoles', roleOpts(), { label: 'adicionar cargo' }))));
+}
+
+function tabCommands() {
+  const c = st.cfg.commands;
+  return h('div', {},
+    card('Comandos personalizados', 'O bot responde quando alguém escreve o prefixo + nome (ex.: !regras).',
+      field('Prefixo', tInput(c, 'prefix', { max: 3 }), 'Até 3 caracteres, ex.: ! ou ?'),
+      listEditor(c.list, () => ({ name: '', aliases: [], response: '', embed: false, color: '#5865f2' }), (x) => {
+        const al = h('input', { type: 'text', value: (x.aliases || []).join(', '), placeholder: 'ex.: regra, rules', oninput: (e) => { x.aliases = e.target.value.split(',').map((s) => s.trim()).filter(Boolean); dirty(); } });
+        return h('div', {},
+          h('div', { class: 'row' }, field('Nome do comando', tInput(x, 'name', { ph: 'regras', max: 32 })), field('Apelidos (separe por vírgula)', al)),
+          field('Resposta', tArea(x, 'response', { rows: 3 })),
+          h('div', { class: 'row' }, chk(x, 'embed', 'Enviar dentro de uma caixa (embed)'), field('Cor da caixa', cInput(x, 'color'))));
+      }, 'Adicionar comando', 100)));
+}
+
+function tabInteraction() {
+  const it = st.cfg.interaction;
+  const ta = h('textarea', { rows: 4, oninput: (e) => { it.mentionReplies = e.target.value.split('\n').map((s) => s.trim()).filter(Boolean); dirty(); } });
+  ta.value = (it.mentionReplies || []).join('\n');
+  const MATCH = [{ v: 'word', t: 'Palavra inteira' }, { v: 'contains', t: 'Contém o texto' }, { v: 'exact', t: 'Mensagem igual' }, { v: 'startswith', t: 'Começa com' }];
+  return h('div', {},
+    card('Quando mencionarem o bot', 'Uma resposta aleatória da lista abaixo.',
+      chk(it, 'mentionReply', 'Responder quando marcarem o bot'),
+      field('Respostas (uma por linha)', ta, 'Aceita {user}, {username}, {server}.')),
+    card('Respostas automáticas', 'Quando alguém escrever uma palavra, o bot responde (máx. 1 vez a cada 10 s por canal).',
+      listEditor(it.triggers, () => ({ trigger: '', match: 'word', reply: '', asReply: true }), (t) => h('div', {},
+        h('div', { class: 'row' }, field('Quando escreverem', tInput(t, 'trigger', { ph: 'oi', max: 100 })), field('Tipo de correspondência', sel(t, 'match', MATCH, { empty: null }))),
+        field('Resposta', tArea(t, 'reply', { rows: 2 })),
+        chk(t, 'asReply', 'Responder diretamente à mensagem')), 'Adicionar resposta', 100)),
+    card('Reações automáticas', 'O bot reage com um emoji quando a palavra aparece.',
+      listEditor(it.reactions, () => ({ trigger: '', match: 'word', emoji: '' }), (r) => h('div', { class: 'row' },
+        field('Palavra', tInput(r, 'trigger', { ph: 'parabéns', max: 100 })), field('Tipo', sel(r, 'match', MATCH, { empty: null })),
+        field('Emoji', tInput(r, 'emoji', { ph: '🎉 ou <:nome:id>', max: 64 }))), 'Adicionar reação', 100)));
+}
+
+function tabTranslate() {
+  const t = st.cfg.translate;
+  const langs = st.langs.map(([n, v]) => ({ v, t: `${n} (${v})` }));
+  return h('div', {},
+    card('Tradução automática', 'Também existe o comando /traduzir.',
+      chk(t, 'enabled', 'Ativar tradução'),
+      chk(t, 'flagReactions', 'Traduzir quando alguém reagir a uma mensagem com uma bandeira (🇺🇸 🇧🇷 🇪🇸 🇫🇷 🇩🇪 🇯🇵 …)')),
+    card('Canais com tradução automática', 'Toda mensagem nesses canais recebe uma resposta traduzida (se o idioma for diferente).',
+      listEditor(t.channels, () => ({ channelId: '', targets: [] }), (c) => h('div', {},
+        field('Canal', sel(c, 'channelId', chOpts())),
+        field('Traduzir para (até 3 idiomas)', multi(c, 'targets', langs, { label: 'adicionar idioma' }))), 'Adicionar canal', 25)));
+}
+
+function tabGames() {
+  const g = st.cfg.games;
+  return h('div', {},
+    card('Mini jogos', 'Comandos: /quiz • /ppt • /adivinhar • /dado • /moeda • /bola8 • /piada • /fato • /abracar',
+      chk(g, 'enabled', 'Ativar mini jogos'),
+      h('div', { class: 'row' },
+        field('Restringir a um canal (opcional)', sel(g, 'channelId', chOpts(), { empty: 'Qualquer canal' })),
+        field('XP de prêmio por vitória', nInput(g, 'rewardXp', 0, 1000), 'Vale para quiz, pedra-papel-tesoura e adivinhar (precisa de níveis ativos). 0 = sem prêmio.'))));
+}
+
+const TAB_FN = { home: tabHome, welcome: () => tabCard('welcome'), leave: () => tabCard('leave'), roles: tabRoles, levels: tabLevels, commands: tabCommands, interaction: tabInteraction, translate: tabTranslate, games: tabGames };
+
+/* ---------- salvar / carregar ---------- */
+async function save() {
+  const r = await api(`/api/guilds/${st.gid}/config`, { method: 'PUT', body: st.cfg });
+  st.cfg = r.config; st.data.config = r.config; st.dirty = false;
+  $('#savebar')?.classList.remove('show');
+  renderTab(); // religa os campos ao objeto salvo
+  toast('Alterações salvas!', 'ok');
+  return r;
+}
+async function reloadData(redraw = true) {
+  st.data = await api(`/api/guilds/${st.gid}/data`);
+  st.cfg = JSON.parse(JSON.stringify(st.data.config));
+  if (redraw) render();
+  else renderTab();
+}
+async function openGuild(id) {
+  try {
+    st.gid = id; st.tab = 'home'; st.dirty = false;
+    await reloadData(false);
+    location.hash = 'g=' + id;
+    render();
+  } catch (e) { toast(e.message, 'err'); st.gid = null; render(); }
+}
+
+/* ---------- render ---------- */
+function topbar() {
+  const u = st.me?.user;
+  return h('header', { class: 'top' },
+    st.bot ? h('img', { src: st.bot.avatar, alt: '' }) : null,
+    h('span', { class: 'brand' }, '⚙️ Painel do ' + (st.bot?.username || 'Bot')),
+    h('span', { class: 'sp' }),
+    u ? h('span', { style: 'color:var(--muted)' }, u.username) : null,
+    st.gid ? h('button', { class: 'btn ghost small', onclick: () => { if (st.dirty && !confirm('Há alterações não salvas. Sair mesmo assim?')) return; st.gid = null; st.dirty = false; history.replaceState(null, '', '#'); render(); } }, 'Trocar servidor') : null,
+    u ? h('a', { class: 'btn ghost small', href: '/auth/logout' }, 'Sair') : null);
+}
+
+function renderTab() {
+  const el = $('#tabbody');
+  if (!el) return;
+  st.onChange = null;
+  el.replaceChildren(TAB_FN[st.tab]());
+  document.querySelectorAll('nav.tabs button').forEach((b) => b.classList.toggle('on', b.dataset.tab === st.tab));
+}
+
+function render() {
+  const app = $('#app');
+  app.replaceChildren(topbar());
+  if (!st.me) {
+    app.append(h('div', { class: 'wrap center' }, h('div', {},
+      h('h1', {}, 'Painel do Bot'), h('p', { style: 'color:var(--muted)' }, 'Entre com sua conta do Discord para configurar o bot nos servidores que você administra.'),
+      h('a', { class: 'btn', href: '/auth/login' }, 'Entrar com Discord'))));
+    return;
+  }
+  if (!st.gid) {
+    app.append(h('div', { class: 'wrap' }, h('h2', {}, 'Escolha um servidor'),
+      st.guilds.length ? h('div', { class: 'grid' }, st.guilds.map((g) => h('div', { class: 'gcard' },
+        g.icon ? h('img', { src: g.icon, alt: '' }) : h('div', { class: 'ph' }, g.name[0]),
+        h('div', { class: 'nm' }, g.name),
+        g.botIn ? h('button', { class: 'btn small', onclick: () => openGuild(g.id) }, 'Configurar')
+          : h('a', { class: 'btn ghost small', href: g.invite, target: '_blank', rel: 'noopener' }, 'Adicionar bot')))) :
+        h('p', { style: 'color:var(--muted)' }, 'Nenhum servidor encontrado onde você tenha a permissão "Gerenciar Servidor".')));
+    return;
+  }
+  app.append(h('div', { class: 'wrap' },
+    h('h2', { style: 'margin:0' }, st.data.guild.name),
+    h('nav', { class: 'tabs' }, TABS.map(([k, label]) => h('button', { 'data-tab': k, class: k === st.tab ? 'on' : '', onclick: () => { st.tab = k; renderTab(); } }, label))),
+    h('div', { id: 'tabbody' })),
+    h('div', { id: 'savebar', class: st.dirty ? 'show' : '' },
+      h('span', {}, 'Você tem alterações não salvas.'),
+      h('button', { class: 'btn green', onclick: () => save().catch((e) => toast(e.message, 'err')) }, '💾 Salvar alterações'),
+      h('button', { class: 'btn ghost', onclick: () => { if (confirm('Descartar alterações?')) { st.dirty = false; reloadData(); } } }, 'Descartar')));
+  renderTab();
+}
+
+window.addEventListener('beforeunload', (e) => { if (st.dirty) { e.preventDefault(); e.returnValue = ''; } });
+
+(async function boot() {
+  try {
+    const me = await api('/api/me');
+    st.me = { user: me.user }; st.bot = me.bot; st.langs = me.langs;
+    st.guilds = await api('/api/guilds');
+    const m = location.hash.match(/g=(\d+)/);
+    if (m && st.guilds.find((g) => g.id === m[1] && g.botIn)) return openGuild(m[1]);
+  } catch { st.me = null; }
+  render();
+})();
+</script>
+</body>
+</html>
