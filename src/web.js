@@ -42,7 +42,7 @@ function startWeb(bot) {
   app.use('/api', rateLimit({ windowMs: 60_000, limit: 150, standardHeaders: true, legacyHeaders: false }));
   const previewLimit = rateLimit({ windowMs: 60_000, limit: 30, standardHeaders: true, legacyHeaders: false });
 
-  // ===== CORRIGIDO =====
+  // ===== CORRIGIDO (next) =====
   const wrap = (fn) => (req, res, next) =>
     Promise.resolve(fn(req, res, next)).catch((e) => {
       console.error('[web]', e);
@@ -52,7 +52,7 @@ function startWeb(bot) {
         next(e);
       }
     });
-  // =====================
+  // ============================
 
   /* ------------------------------ login ------------------------------ */
 
@@ -150,11 +150,18 @@ function startWeb(bot) {
       .map((g) => ({
         id: g.id,
         name: g.name,
-        // ===== CORRIGIDO A IMAGEM AQUI =====
-        icon: g.icon 
-          ? `https://cdn.discordapp.com/icons/\( {g.id}/ \){g.icon}.png?size=64` 
-          : `https://cdn.discordapp.com/embed/avatars/${Number(BigInt(g.id) % 5n)}.png`,
-        // ==================================
+        // ===== CORRIGIDO (imagem do servidor) =====
+        icon: (() => {
+          const guild = client.guilds.cache.get(g.id);
+          if (guild?.icon) {
+            return guild.iconURL({ size: 64, extension: 'png' });
+          }
+          if (g.icon) {
+            return `https://cdn.discordapp.com/icons/\( {g.id}/ \){g.icon}.png?size=64`;
+          }
+          return 'https://cdn.discordapp.com/embed/avatars/0.png';
+        })(),
+        // ==========================================
         botIn: client.guilds.cache.has(g.id),
         invite: inviteUrl(g.id),
       }))
