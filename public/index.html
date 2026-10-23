@@ -183,11 +183,13 @@ function multi(o, k, options, { label = 'adicionar…' } = {}) {
 function listEditor(arr, makeItem, row, addLabel, max = 100) {
   const box = h('div');
   const draw = () => {
-    box.replaceChildren(
-      arr.map((it, i) => h('div', { class: 'item' },
+    const kids = [
+      ...arr.map((it, i) => h('div', { class: 'item' },
         h('button', { class: 'btn danger small x', onclick: () => { arr.splice(i, 1); dirty(); draw(); } }, 'Remover'),
         row(it, i, draw))),
-      arr.length < max ? h('button', { class: 'btn ghost', onclick: () => { arr.push(makeItem()); dirty(); draw(); } }, '+ ' + addLabel) : null);
+      arr.length < max ? h('button', { class: 'btn ghost', onclick: () => { arr.push(makeItem()); dirty(); draw(); } }, '+ ' + addLabel) : null
+    ].filter(Boolean);
+    box.replaceChildren(...kids);
   };
   draw();
   return box;
@@ -259,7 +261,7 @@ function tabCard(kind) {
     if (!c.useImage) { img.removeAttribute('src'); img.style.display = 'none'; return; }
     img.style.display = '';
     try {
-      const r = await fetch(`/api/guilds/${st.gid}/preview/${kind}`, { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(c) });
+      const r = await fetch(`/api/guilds/\( {st.gid}/preview/ \){kind}`, { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(c) });
       if (!r.ok) throw new Error((await r.json()).error || 'Erro na prévia');
       const old = img.src; img.src = URL.createObjectURL(await r.blob()); if (old.startsWith('blob:')) URL.revokeObjectURL(old);
     } catch (e) { toast(e.message, 'err'); }
@@ -272,7 +274,7 @@ function tabCard(kind) {
   const test = async () => {
     try {
       if (st.dirty) await save();
-      await api(`/api/guilds/${st.gid}/test/${kind}`, { method: 'POST' });
+      await api(`/api/guilds/\( {st.gid}/test/ \){kind}`, { method: 'POST' });
       toast('Mensagem de teste enviada no canal!', 'ok');
     } catch (e) { toast(e.message, 'err'); }
   };
@@ -308,23 +310,27 @@ function tabRoles() {
   const box = h('div');
   const STY = [{ v: 1, t: '🔵 Azul' }, { v: 2, t: '⚫ Cinza' }, { v: 3, t: '🟢 Verde' }, { v: 4, t: '🔴 Vermelho' }];
   const draw = () => {
-    box.replaceChildren(
+    const kids = [
       !st.data.botCanManageRoles ? h('div', { class: 'warn' }, '⚠️ O bot precisa da permissão "Gerenciar Cargos".') : null,
-      panels.map((p, pi) => {
+      ...panels.map((p, pi) => {
         const prev = h('div', { class: 'dbtns' });
-        const drawPrev = () => prev.replaceChildren(p.buttons.map((b) =>
+        const drawPrev = () => prev.replaceChildren(...p.buttons.map((b) =>
           h('span', { class: 'dbtn s' + b.style }, [b.emoji, b.label || roleName(b.roleId)].filter(Boolean).join(' '))));
         drawPrev();
         const btns = h('div');
-        const drawBtns = () => btns.replaceChildren(
-          p.buttons.map((b, bi) => h('div', { class: 'item' },
-            h('div', { class: 'row' },
-              field('Cargo', sel(b, 'roleId', roleOpts(), { empty: '— cargo —' })),
-              field('Texto do botão', tInput(b, 'label', { ph: 'ex.: Gamer', max: 80 })),
-              field('Emoji (opcional)', tInput(b, 'emoji', { ph: '🎮', max: 64 })),
-              field('Cor', sel(b, 'style', STY, { empty: null, num: true }))),
-            h('button', { class: 'btn danger small', onclick: () => { p.buttons.splice(bi, 1); dirty(); drawBtns(); drawPrev(); } }, 'Remover botão'))),
-          p.buttons.length < 25 ? h('button', { class: 'btn ghost', onclick: () => { p.buttons.push({ roleId: '', label: '', emoji: '', style: (p.buttons.length % 4) + 1 }); dirty(); drawBtns(); } }, '+ Adicionar botão') : null);
+        const drawBtns = () => {
+          const bKids = [
+            ...p.buttons.map((b, bi) => h('div', { class: 'item' },
+              h('div', { class: 'row' },
+                field('Cargo', sel(b, 'roleId', roleOpts(), { empty: '— cargo —' })),
+                field('Texto do botão', tInput(b, 'label', { ph: 'ex.: Gamer', max: 80 })),
+                field('Emoji (opcional)', tInput(b, 'emoji', { ph: '🎮', max: 64 })),
+                field('Cor', sel(b, 'style', STY, { empty: null, num: true }))),
+              h('button', { class: 'btn danger small', onclick: () => { p.buttons.splice(bi, 1); dirty(); drawBtns(); drawPrev(); } }, 'Remover botão'))),
+            p.buttons.length < 25 ? h('button', { class: 'btn ghost', onclick: () => { p.buttons.push({ roleId: '', label: '', emoji: '', style: (p.buttons.length % 4) + 1 }); dirty(); drawBtns(); } }, '+ Adicionar botão') : null
+          ].filter(Boolean);
+          btns.replaceChildren(...bKids);
+        };
         drawBtns();
         const onAnyChange = () => drawPrev();
         btns.addEventListener('input', onAnyChange); btns.addEventListener('change', onAnyChange);
@@ -332,7 +338,7 @@ function tabRoles() {
         const publish = async () => {
           try {
             await save();
-            const r = await api(`/api/guilds/${st.gid}/panels/${p.id}/publish`, { method: 'POST' });
+            const r = await api(`/api/guilds/\( {st.gid}/panels/ \){p.id}/publish`, { method: 'POST' });
             toast('Painel publicado no Discord!', 'ok');
             await reloadData(false);
           } catch (e) { toast(e.message, 'err'); }
@@ -359,7 +365,9 @@ function tabRoles() {
       panels.length < 20 ? h('button', { class: 'btn', onclick: () => {
         panels.push({ id: Math.random().toString(36).slice(2, 10), name: 'Painel ' + (panels.length + 1), channelId: '', messageId: '', useEmbed: true, title: 'Escolha seus cargos', content: 'Clique nos botões abaixo para pegar ou remover um cargo.', color: '#5865f2', mode: 'toggle', buttons: [] });
         dirty(); draw();
-      } }, '+ Novo painel de cargos') : null);
+      } }, '+ Novo painel de cargos') : null
+    ].filter(Boolean);
+    box.replaceChildren(...kids);
   };
   draw();
   return box;
@@ -422,11 +430,11 @@ function tabInteraction() {
 
 function tabTranslate() {
   const t = st.cfg.translate;
-  const langs = st.langs.map(([n, v]) => ({ v, t: `${n} (${v})` }));
+  const langs = st.langs.map(([n, v]) => ({ v, t: `\( {n} ( \){v})` }));
   return h('div', {},
     card('Tradução automática', 'Também existe o comando /traduzir.',
       chk(t, 'enabled', 'Ativar tradução'),
-      chk(t, 'flagReactions', 'Traduzir quando alguém reagir a uma mensagem com uma bandeira (🇺🇸 🇧🇷 🇪🇸 🇫🇷 🇩🇪 🇯🇵 …)')),
+      chk(t, 'flagReactions', 'Traduzir quando alguém reagir a uma mensagem com uma bandeira (🇺🇸 🇧🇷 🇪🇸 🇫🇷 🇩🇪 🇯🇵 🇦🇷 🇹🇼 🇬🇧 …)')),
     card('Canais com tradução automática', 'Toda mensagem nesses canais recebe uma resposta traduzida (se o idioma for diferente).',
       listEditor(t.channels, () => ({ channelId: '', targets: [] }), (c) => h('div', {},
         field('Canal', sel(c, 'channelId', chOpts())),
@@ -450,7 +458,7 @@ async function save() {
   const r = await api(`/api/guilds/${st.gid}/config`, { method: 'PUT', body: st.cfg });
   st.cfg = r.config; st.data.config = r.config; st.dirty = false;
   $('#savebar')?.classList.remove('show');
-  renderTab(); // religa os campos ao objeto salvo
+  renderTab();
   toast('Alterações salvas!', 'ok');
   return r;
 }
