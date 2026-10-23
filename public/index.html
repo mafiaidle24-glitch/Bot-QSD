@@ -95,6 +95,13 @@ function h(tag, attrs, ...kids) {
   }
   return e;
 }
+// replaceChildren/append aceitam listas aninhadas e ignoram null/false (evita aparecer "null" e "[object HTMLDivElement]").
+for (const fn of ['replaceChildren', 'append']) {
+  const orig = Element.prototype[fn];
+  Element.prototype[fn] = function (...kids) {
+    return orig.apply(this, kids.flat(Infinity).filter((k) => k != null && k !== false));
+  };
+}
 function toast(msg, type = '') {
   const t = h('div', { class: 't ' + type }, msg);
   $('#toast').append(t);
