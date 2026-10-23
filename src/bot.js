@@ -37,6 +37,8 @@ const shuffle = (list) => {
 const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const avatarOf = (user) => user.displayAvatarURL({ extension: 'png', size: 256, forceStatic: true });
 const nameOf = (member, user) => member?.displayName || user.globalName || user.username;
+// Nome em negrito (sem menção). Usado nas respostas de comandos de barra, onde o @ azul aparecia como número.
+const dn = (member, user) => '**' + String(nameOf(member, user)).replace(/[*_\u0060~|>\\]/g, '') + '**';
 const log = (...a) => console.log('[bot]', ...a);
 const warn = (where, e) => console.error('[bot] erro em ' + where + ':', e?.message || e);
 
@@ -300,7 +302,7 @@ client.on(Events.MessageReactionAdd, async (reaction, user) => {
     const r = await translate(text, lang);
     if (!r.text || baseLang(r.from) === baseLang(lang)) return;
     await msg.reply({
-      content: ('🌐 **' + (r.from || '?') + ' → ' + lang + '** (pedido de ' + user + ')\n' + r.text).slice(0, 1900),
+      content: ('🌐 **' + (r.from || '?') + ' → ' + lang + '** (pedido de ' + dn(null, user) + ')\n' + r.text).slice(0, 1900),
       allowedMentions: { parse: [], repliedUser: false },
     });
   } catch (e) {
@@ -469,7 +471,7 @@ async function handleQuizButton(i) {
   const xp = cfgs.getConfig(i.guild.id).games.rewardXp;
   const old = i.message.embeds[0];
   await i.update({
-    embeds: [EmbedBuilder.from(old).setColor(0x23a55a).setDescription('🏆 ' + i.user + ' acertou: **' + chosen.t + '**!' + (xp ? ' +' + xp + ' XP' : ''))],
+    embeds: [EmbedBuilder.from(old).setColor(0x23a55a).setDescription('🏆 ' + dn(i.member, i.user) + ' acertou: **' + chosen.t + '**!' + (xp ? ' +' + xp + ' XP' : ''))],
     components: quizRows(state, true),
   });
   await reward(i.guild, i.member, i.channel);
@@ -540,11 +542,15 @@ async function runSlash(i) {
       if (!cfg.levels.enabled) return i.reply({ content: 'O sistema de níveis está desativado.', flags: EPHEMERAL });
       const list = db.top(i.guild.id, 10);
       if (!list.length) return i.reply({ content: 'Ninguém tem XP ainda. Comece a conversar! 💬', flags: EPHEMERAL });
+      await i.deferReply();
+      const members = await i.guild.members.fetch({ user: list.map((u) => u.id) }).catch(() => null);
       const medals = ['🥇', '🥈', '🥉'];
-      const lines = list.map((u, n) => (medals[n] || '**' + (n + 1) + '.**') + ' <@' + u.id + '> — nível **' + levelInfo(u.xp).level + '** • ' + u.xp + ' XP');
-      return i.reply({
+      const lines = list.map((u, n) => {
+        const name = members?.get(u.id)?.displayName || 'Membro que saiu';
+        return (medals[n] || '**' + (n + 1) + '.**') + ' **' + name.replace(/[*_\u0060~|>]/g, '') + '** — nível **' + levelInfo(u.xp).level + '** • ' + u.xp + ' XP';
+      });
+      return i.editReply({
         embeds: [new EmbedBuilder().setColor(0xf0b232).setTitle('🏆 Top ' + list.length + ' • ' + i.guild.name).setDescription(lines.join('\n'))],
-        allowedMentions: { parse: [] },
       });
     }
     case 'traduzir': {
@@ -574,7 +580,7 @@ async function runSlash(i) {
           new ButtonBuilder().setCustomId('ppt:' + i.user.id + ':' + k).setLabel(k[0].toUpperCase() + k.slice(1)).setEmoji(e).setStyle(ButtonStyle.Secondary)
         )
       );
-      return i.reply({ content: i.user + ', escolha sua jogada:', components: [row], allowedMentions: { users: [i.user.id] } });
+      return i.reply({ content: dn(i.member, i.user) + ', escolha sua jogada:', components: [row], allowedMentions: { parse: [] } });
     }
     case 'quiz':
       if (!gameAllowed(i)) return;
@@ -592,8 +598,9 @@ async function runSlash(i) {
     case 'fato': return i.reply('🧠 **Você sabia?** ' + pick(FACTS));
     case 'abracar': {
       const target = i.options.getUser('membro');
-      const text = target.id === i.user.id ? i.user + ' abraçou a si mesmo... 🥲 (vem cá, ganha um abraço do bot!)' : i.user + ' deu um abraço apertado em ' + target + '! 🤗';
-      return i.reply({ content: text, allowedMentions: { users: [target.id] } });
+      const me = dn(i.member, i.user);
+      const text = target.id === i.user.id ? me + ' abraçou a si mesmo... 🥲 (vem cá, ganha um abraço do bot!)' : me + ' deu um abraço apertado em ' + dn(i.options.getMember('membro'), target) + '! 🤗';
+      return i.reply({ content: text, allowedMentions: { parse: [] } });
     }
     case 'bola8':
       return i.reply('🎱 **' + i.options.getString('pergunta') + '**\n' + pick(EIGHT_BALL));
