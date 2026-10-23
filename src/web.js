@@ -42,17 +42,11 @@ function startWeb(bot) {
   app.use('/api', rateLimit({ windowMs: 60_000, limit: 150, standardHeaders: true, legacyHeaders: false }));
   const previewLimit = rateLimit({ windowMs: 60_000, limit: 30, standardHeaders: true, legacyHeaders: false });
 
-  // ===== CORRIGIDO (next) =====
   const wrap = (fn) => (req, res, next) =>
     Promise.resolve(fn(req, res, next)).catch((e) => {
       console.error('[web]', e);
-      if (!res.headersSent) {
-        res.status(500).json({ error: e.message || 'Erro interno' });
-      } else {
-        next(e);
-      }
+      res.status(500).json({ error: e.message || 'Erro interno' });
     });
-  // ============================
 
   /* ------------------------------ login ------------------------------ */
 
@@ -114,8 +108,9 @@ function startWeb(bot) {
 
   /** Confere (ao vivo) se quem chamou administra o servidor e se o bot está nele. */
   const guildAccess = wrap(async (req, res, next) => {
-    const guild = client.guilds.cache.get(req.params.id);
-    if (!guild) return res.status(404).json({ error: 'O bot não está neste servidor.' });
+    const gid = String(req.params.id || '').slice(0, 30);
+    const guild = client.guilds.cache.get(gid) || (await client.guilds.fetch(gid).catch(() => null));
+    if (!guild) return res.status(404).json({ error: `O bot não está neste servidor (id recebido: ${gid || 'vazio'}).` });
     const member = await guild.members.fetch(req.session.user.id).catch(() => null);
     const ok = member && (guild.ownerId === member.id || member.permissions.has(PermissionFlagsBits.ManageGuild));
     if (!ok) return res.status(403).json({ error: 'Você precisa da permissão "Gerenciar Servidor".' });
@@ -150,18 +145,7 @@ function startWeb(bot) {
       .map((g) => ({
         id: g.id,
         name: g.name,
-        // ===== CORRIGIDO (imagem do servidor) =====
-        icon: (() => {
-          const guild = client.guilds.cache.get(g.id);
-          if (guild?.icon) {
-            return guild.iconURL({ size: 64, extension: 'png' });
-          }
-          if (g.icon) {
-            return `https://cdn.discordapp.com/icons/\( {g.id}/ \){g.icon}.png?size=64`;
-          }
-          return 'https://cdn.discordapp.com/embed/avatars/0.png';
-        })(),
-        // ==========================================
+        icon: g.icon ? `https://cdn.discordapp.com/icons/${g.id}/${g.icon}.png?size=64` : null,
         botIn: client.guilds.cache.has(g.id),
         invite: inviteUrl(g.id),
       }))
