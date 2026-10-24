@@ -4,6 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Painel do Bot</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#1e1f22">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Bot QSD">
+<link rel="icon" type="image/png" href="/icon-192.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <style>
 :root{
   --bg:#18181c; --panel:#232428; --panel2:#1e1f22; --line:#33353b; --text:#f2f3f5; --muted:#9a9ea6;
@@ -526,6 +533,7 @@ function render() {
   renderTab();
 }
 
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
 window.addEventListener('beforeunload', (e) => { if (st.dirty) { e.preventDefault(); e.returnValue = ''; } });
 
 (async function boot() {
