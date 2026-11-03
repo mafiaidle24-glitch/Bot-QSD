@@ -230,6 +230,64 @@ async function publishPanel(guildId, panelId) {
   return msg.url;
 }
 
+function embedHasContent(e) {
+  return !!(e.title || e.description || e.authorName || e.footerText || e.image || e.thumbnail || e.fields.length);
+}
+
+function buildMessagePayload(guild, m) {
+  const sv = (t) => String(t || '').replace(/\{server\}/gi, guild.name).replace(/\{count\}/gi, String(guild.memberCount));
+  const embeds = [];
+  for (const e of m.embeds.filter(embedHasContent)) {
+    const em = new EmbedBuilder().setColor(e.color);
+    if (e.title) em.setTitle(sv(e.title));
+    if (e.url && e.title) em.setURL(e.url);
+    if (e.description) em.setDescription(sv(e.description));
+    if (e.authorName) em.setAuthor({ name: sv(e.authorName), iconURL: e.authorIcon || undefined, url: e.authorUrl || undefined });
+    if (e.thumbnail) em.setThumbnail(e.thumbnail);
+    if (e.image) em.setImage(e.image);
+    if (e.footerText) em.setFooter({ text: sv(e.footerText), iconURL: e.footerIcon || undefined });
+    if (e.timestamp) em.setTimestamp();
+    if (e.fields.length) em.addFields(e.fields.map((f) => ({ name: sv(f.name), value: sv(f.value), inline: f.inline })));
+    embeds.push(em);
+  }
+  const content = sv(m.content);
+  if (!content && !embeds.length) throw new Error('A mensagem está vazia. Escreva um texto ou preencha pelo menos um embed (título, descrição, imagem...).');
+  const total = m.embeds.filter(embedHasContent).reduce((sum, e) =>
+    sum + e.title.length + e.description.length + e.authorName.length + e.footerText.length +
+    e.fields.reduce((a, f) => a + f.name.length + f.value.length, 0), 0);
+  if (total > 6000) throw new Error('Os embeds passam de 6000 caracteres no total (limite do Discord). Reduza os textos.');
+  return {
+    content: content || '',
+    embeds,
+    allowedMentions: m.pingRoles ? { parse: ['roles'] } : { parse: [] },
+  };
+}
+
+async function publishMessage(guildId, msgId) {
+  let guild = client.guilds.cache.get(guildId);
+  if (!guild) {
+    try { guild = await client.guilds.fetch(guildId); } catch { throw new Error('O bot não está nesse servidor.'); }
+  }
+  const m = cfgs.getConfig(guildId).messages.find((x) => x.id === msgId);
+  if (!m) throw new Error('Mensagem não encontrada. Salve as alterações primeiro.');
+  if (!m.channelId) throw new Error('Escolha o canal onde a mensagem será publicada.');
+  const channel = await guild.channels.fetch(m.channelId).catch(() => null);
+  if (!channel || !channel.isTextBased()) throw new Error('Canal inválido ou sem acesso para o bot.');
+
+  const payload = buildMessagePayload(guild, m);
+  let msg = null;
+  if (m.messageId) {
+    msg = await channel.messages.fetch(m.messageId).catch(() => null);
+    if (msg && msg.author.id === client.user.id) await msg.edit(payload);
+    else msg = null;
+  }
+  if (!msg) {
+    msg = await channel.send(payload);
+    cfgs.setMessageRef(guildId, msgId, msg.id);
+  }
+  return msg.url;
+}
+
 async function handleRoleButton(i) {
   const [, panelId, roleId] = i.customId.split(':');
   const panel = cfgs.getConfig(i.guild.id).panels.find((p) => p.id === panelId);
@@ -639,4 +697,4 @@ async function start() {
   await client.login(process.env.DISCORD_TOKEN);
 }
 
-module.exports = { client, start, sendCard, publishPanel, fmt };
+module.exports = { client, start, sendCard, publishPanel, publishMessage, fmt };
