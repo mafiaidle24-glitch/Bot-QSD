@@ -7,6 +7,7 @@ const rateLimit = require('express-rate-limit');
 const { ChannelType, PermissionFlagsBits, PermissionsBitField } = require('discord.js');
 
 const cfgs = require('./config');
+const uploads = require('./uploads');
 const { renderCard } = require('./card');
 const { LANGS } = require('./translate');
 
@@ -181,6 +182,22 @@ function startWeb(bot) {
   app.put('/api/guilds/:id/config', requireAuth, guildAccess, (req, res) => {
     const clean = cfgs.setConfig(req.guild.id, req.body);
     res.json({ config: clean });
+  });
+
+  // Envio de imagens do celular/computador (corpo = bytes da imagem)
+  app.post('/api/guilds/:id/uploads', requireAuth, guildAccess, express.raw({ type: '*/*', limit: uploads.MAX }), (req, res) => {
+    try {
+      if (!Buffer.isBuffer(req.body) || !req.body.length) return res.status(400).json({ error: 'Nenhuma imagem recebida (máx. 8 MB).' });
+      res.json({ ref: uploads.save(req.guild.id, req.body) });
+    } catch (e) {
+      res.status(400).json({ error: e.message });
+    }
+  });
+
+  app.get('/api/guilds/:id/uploads/:file', requireAuth, guildAccess, (req, res) => {
+    const p = uploads.pathByName(req.guild.id, String(req.params.file));
+    if (!p) return res.status(404).end();
+    res.set('Cache-Control', 'private, max-age=86400').sendFile(p);
   });
 
   app.post('/api/guilds/:id/messages/:msgId/publish', requireAuth, guildAccess, wrap(async (req, res) => {
