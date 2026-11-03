@@ -88,6 +88,20 @@ textarea{resize:vertical;min-height:80px}
 .epv-img{max-width:100%;border-radius:6px;margin-top:4px}
 .epv-thumb{width:70px;height:70px;object-fit:cover;border-radius:6px;flex:none}
 .epv-foot{display:flex;align-items:center;gap:8px;font-size:12px;color:#b5bac1;margin-top:2px}
+.cpv{background:#2b2d31;border:1px solid #3f4147;border-left:4px solid #3f4147;border-radius:8px;padding:12px;margin-top:4px;display:flex;flex-direction:column;gap:8px;max-width:520px}
+.cpv-h1{font-size:20px;font-weight:700}.cpv-h2{font-size:17px;font-weight:700}.cpv-h3{font-size:15px;font-weight:700}
+.cpv-sec{display:flex;gap:12px;align-items:flex-start;justify-content:space-between}
+.cpv-gal{display:grid;gap:4px;grid-template-columns:repeat(2,1fr)}
+.cpv-gal.one{grid-template-columns:1fr}
+.cpv-gal img{width:100%;max-height:260px;object-fit:cover;border-radius:6px}
+.cpv hr{border:0;border-top:1px solid #4a4d55;margin:2px 0;width:100%}
+.cpv .sp-l{height:14px}
+.imgp{display:flex;flex-direction:column;gap:6px}
+.imgp .ir{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.imgp .ir input[type=text]{flex:1;min-width:140px}
+.imgp img{max-height:70px;max-width:140px;border-radius:6px;border:1px solid var(--line);object-fit:cover}
+.itbar{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.ithead{font-weight:700;font-size:13px;margin-bottom:6px;color:var(--muted,#b5bac1)}
 #savebar{position:fixed;left:0;right:0;bottom:-80px;background:var(--panel2);border-top:1px solid var(--line);padding:12px 20px;display:flex;gap:12px;align-items:center;justify-content:center;transition:bottom .2s;z-index:9}
 #savebar.show{bottom:0}
 #toast{position:fixed;top:70px;right:16px;display:flex;flex-direction:column;gap:8px;z-index:20}
@@ -477,6 +491,129 @@ function tabGames() {
 }
 
 /* ---------- Mensagens com embed ---------- */
+/* ---------- imagens (link ou enviada do aparelho) + container ---------- */
+function imgSrc(v) {
+  v = String(v || '');
+  return v.indexOf('up:') === 0 ? '/api/guilds/' + st.gid + '/uploads/' + v.slice(3) : v;
+}
+
+function imgPicker(o, k) {
+  const box = h('div', { class: 'imgp' });
+  const draw = () => {
+    const v = o[k] || '';
+    const mine = v.indexOf('up:') === 0;
+    const txt = h('input', { type: 'text', maxlength: 500, placeholder: mine ? 'Imagem enviada do aparelho ✔' : 'https://… (ou envie do aparelho)',
+      oninput: (e) => { o[k] = e.target.value; dirty(); } });
+    txt.value = mine ? '' : v;
+    if (mine) txt.disabled = true;
+    const file = h('input', { type: 'file', accept: 'image/png,image/jpeg,image/gif,image/webp', style: 'display:none' });
+    file.addEventListener('change', async () => {
+      const f = file.files && file.files[0];
+      if (!f) return;
+      if (f.size > 8 * 1024 * 1024) { toast('Imagem muito grande (máx. 8 MB).', 'err'); return; }
+      try {
+        const r = await fetch('/api/guilds/' + st.gid + '/uploads', { method: 'POST', credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/octet-stream' }, body: await f.arrayBuffer() });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(j.error || 'Erro ' + r.status);
+        o[k] = j.ref; dirty(); draw(); if (st.onChange) st.onChange();
+        toast('Imagem enviada!', 'ok');
+      } catch (e) { toast(e.message, 'err'); }
+    });
+    box.replaceChildren(
+      h('div', { class: 'ir' }, txt,
+        h('button', { class: 'btn ghost small', type: 'button', onclick: () => file.click() }, '📁 Enviar do aparelho'),
+        v ? h('button', { class: 'btn danger small', type: 'button', onclick: () => { o[k] = ''; dirty(); draw(); if (st.onChange) st.onChange(); } }, 'Limpar') : null,
+        file),
+      v ? hideOnError(h('img', { src: imgSrc(v), alt: '' })) : null);
+  };
+  draw();
+  return box;
+}
+
+function newItem(type) {
+  if (type === 'text') return { type: 'text', content: '' };
+  if (type === 'section') return { type: 'section', content: '', image: '', desc: '' };
+  if (type === 'gallery') return { type: 'gallery', images: [{ src: '', desc: '' }] };
+  return { type: 'separator', divider: true, large: false };
+}
+
+function mdLines(text) {
+  const out = [];
+  String(text || '').split('\n').forEach((ln) => {
+    const m = /^(#{1,3}) (.*)$/.exec(ln);
+    if (m) out.push(h('div', { class: 'cpv-h' + m[1].length }, discordText(m[2])));
+    else out.push(h('div', {}, ln ? discordText(ln) : h('br')));
+  });
+  return out;
+}
+
+function containerPreview(c) {
+  const kids = [];
+  c.items.forEach((it) => {
+    if (it.type === 'text' && it.content.trim()) kids.push(h('div', {}, mdLines(it.content)));
+    else if (it.type === 'section' && it.content.trim()) {
+      kids.push(h('div', { class: 'cpv-sec' }, h('div', { style: 'min-width:0;flex:1' }, mdLines(it.content)),
+        it.image ? hideOnError(h('img', { class: 'epv-thumb', src: imgSrc(it.image), alt: '' })) : null));
+    } else if (it.type === 'gallery') {
+      const imgs = it.images.filter((g) => g.src);
+      if (imgs.length) kids.push(h('div', { class: 'cpv-gal' + (imgs.length === 1 ? ' one' : '') }, imgs.map((g) => hideOnError(h('img', { src: imgSrc(g.src), alt: '' })))));
+    } else if (it.type === 'separator') {
+      kids.push(it.divider ? h('hr') : h('div', { class: 'sp-s' }));
+      if (it.large) kids.push(h('div', { class: 'sp-l' }));
+    }
+  });
+  return h('div', { class: 'cpv', style: c.color ? 'border-left-color:' + c.color : '' },
+    kids.length ? kids : h('p', { class: 'sub' }, 'Adicione itens para ver a prévia.'));
+}
+
+function containerEditor(c, MV) {
+  const box = h('div');
+  const items = h('div');
+  const labels = { text: '📝 Texto', section: '🖼️ Texto + imagem ao lado', gallery: '🎞️ Galeria de imagens', separator: '➖ Separador' };
+  const redraw = () => { drawItems(); if (st.onChange) st.onChange(); };
+  const drawItems = () => {
+    items.replaceChildren(c.items.map((it, i) => {
+      let body;
+      if (it.type === 'text') {
+        body = field('Texto', tArea(it, 'content', Object.assign({ rows: 5, max: 2000 }, MV)),
+          'Aceita **negrito**, menções e títulos: comece a linha com # (grande), ## ou ###.');
+      } else if (it.type === 'section') {
+        body = h('div', {}, field('Texto', tArea(it, 'content', Object.assign({ rows: 4, max: 2000 }, MV))),
+          field('Imagem pequena ao lado (direita)', imgPicker(it, 'image')),
+          field('Descrição da imagem (opcional)', tInput(it, 'desc', { max: 256 })));
+      } else if (it.type === 'gallery') {
+        body = h('div', {}, listEditor(it.images, () => ({ src: '', desc: '' }), (g) => h('div', {},
+          field('Imagem', imgPicker(g, 'src')), field('Descrição (opcional)', tInput(g, 'desc', { max: 256 }))), 'Adicionar imagem', 10));
+      } else {
+        body = h('div', {}, chk(it, 'divider', 'Mostrar uma linha divisória'), chk(it, 'large', 'Espaço grande'));
+      }
+      return h('div', { class: 'item' },
+        h('div', { class: 'ithead' }, labels[it.type] || it.type),
+        body,
+        h('div', { class: 'itbar' },
+          i > 0 ? h('button', { class: 'btn ghost small', type: 'button', onclick: () => { c.items.splice(i - 1, 0, c.items.splice(i, 1)[0]); dirty(); redraw(); } }, '↑ Subir') : null,
+          i < c.items.length - 1 ? h('button', { class: 'btn ghost small', type: 'button', onclick: () => { c.items.splice(i + 1, 0, c.items.splice(i, 1)[0]); dirty(); redraw(); } }, '↓ Descer') : null,
+          h('button', { class: 'btn danger small', type: 'button', onclick: () => { c.items.splice(i, 1); dirty(); redraw(); } }, 'Remover')));
+    }));
+  };
+  drawItems();
+  const colorOn = h('input', { type: 'checkbox', checked: !!c.color });
+  const colorRow = h('div');
+  const drawColor = () => colorRow.replaceChildren(c.color ? field('Cor da barra lateral', cInput(c, 'color')) : null);
+  colorOn.addEventListener('change', () => { c.color = colorOn.checked ? '#5865f2' : ''; dirty(); drawColor(); if (st.onChange) st.onChange(); });
+  drawColor();
+  const add = (t) => h('button', { class: 'btn ghost', type: 'button', onclick: () => { c.items.push(newItem(t)); dirty(); redraw(); } }, '+ ' + labels[t]);
+  box.append(
+    h('label', { class: 'chk' }, colorOn, ' Usar barra colorida na lateral'),
+    colorRow,
+    chk(c, 'spoiler', 'Esconder o container como spoiler'),
+    h('div', { class: 'lbl-s' }, 'ITENS DO CONTAINER (na ordem em que aparecem)'),
+    items,
+    h('div', { class: 'itbar' }, add('text'), add('section'), add('gallery'), add('separator')));
+  return box;
+}
+
 function newEmbed() {
   return { title: '', url: '', description: '', color: '#5865f2', authorName: '', authorIcon: '', authorUrl: '',
     thumbnail: '', image: '', footerText: '', footerIcon: '', timestamp: false, fields: [] };
@@ -489,18 +626,18 @@ function hideOnError(img) { img.addEventListener('error', () => { img.style.disp
 function embedPreview(e) {
   const t = (x) => discordText(x);
   const main = h('div', { class: 'epv-main' });
-  if (e.authorName) main.append(h('div', { class: 'epv-author' }, e.authorIcon ? hideOnError(h('img', { src: e.authorIcon, alt: '' })) : null, h('span', {}, t(e.authorName))));
+  if (e.authorName) main.append(h('div', { class: 'epv-author' }, e.authorIcon ? hideOnError(h('img', { src: imgSrc(e.authorIcon), alt: '' })) : null, h('span', {}, t(e.authorName))));
   if (e.title) main.append(h('div', { class: 'epv-title' + (e.url ? ' link' : '') }, t(e.title)));
   if (e.description) main.append(h('div', { class: 'epv-desc' }, t(e.description)));
   if (e.fields && e.fields.length) {
     main.append(h('div', { class: 'epv-fields' }, e.fields.map((f) =>
       h('div', { class: 'epv-f' + (f.inline ? ' inl' : '') }, h('div', { class: 'epv-fn' }, t(f.name)), h('div', { class: 'epv-fv' }, t(f.value))))));
   }
-  if (e.image) main.append(hideOnError(h('img', { class: 'epv-img', src: e.image, alt: '' })));
+  if (e.image) main.append(hideOnError(h('img', { class: 'epv-img', src: imgSrc(e.image), alt: '' })));
   const foot = [e.footerText, e.timestamp ? 'Hoje às 12:00' : ''].filter(Boolean).join(' • ');
-  if (foot) main.append(h('div', { class: 'epv-foot' }, e.footerIcon ? hideOnError(h('img', { src: e.footerIcon, alt: '' })) : null, h('span', {}, foot)));
+  if (foot) main.append(h('div', { class: 'epv-foot' }, e.footerIcon ? hideOnError(h('img', { src: imgSrc(e.footerIcon), alt: '' })) : null, h('span', {}, foot)));
   return h('div', { class: 'epv', style: 'border-left-color:' + e.color },
-    h('div', { class: 'epv-row' }, main, e.thumbnail ? hideOnError(h('img', { class: 'epv-thumb', src: e.thumbnail, alt: '' })) : null));
+    h('div', { class: 'epv-row' }, main, e.thumbnail ? hideOnError(h('img', { class: 'epv-thumb', src: imgSrc(e.thumbnail), alt: '' })) : null));
 }
 
 function tabMessages() {
@@ -509,7 +646,7 @@ function tabMessages() {
   const previews = [];
   st.onChange = () => previews.forEach((fn) => fn());
   const MV = { vars: ['{server}', '{count}'] };
-  const IMG_HINT = 'Link direto de imagem que não expire (ex.: imgur, ou um arquivo da pasta public do seu GitHub).';
+  const IMG_HINT = 'Toque em "Enviar do aparelho" para usar uma imagem do seu celular/computador, ou cole um link direto.';
 
   const embedEditor = (e) => h('div', {},
     h('div', { class: 'row' },
@@ -518,15 +655,15 @@ function tabMessages() {
     field('Descrição', tArea(e, 'description', Object.assign({ rows: 6, max: 4000 }, MV)), 'Aceita **negrito**, menções de cargo/canal e as variáveis {server} e {count}.'),
     h('div', { class: 'row' },
       field('Cor da barra lateral', cInput(e, 'color')),
-      field('Imagem grande (link)', tInput(e, 'image', { ph: 'https://…/imagem.png', max: 500 }), IMG_HINT),
-      field('Miniatura no canto (link)', tInput(e, 'thumbnail', { ph: 'https://…/mini.png', max: 500 }))),
+      field('Imagem grande', imgPicker(e, 'image'), IMG_HINT),
+      field('Miniatura no canto', imgPicker(e, 'thumbnail'))),
     h('div', { class: 'row' },
       field('Autor (nome)', tInput(e, 'authorName', { max: 256 })),
-      field('Autor (ícone, link)', tInput(e, 'authorIcon', { ph: 'https://…', max: 500 })),
+      field('Autor (ícone)', imgPicker(e, 'authorIcon')),
       field('Autor (link ao clicar)', tInput(e, 'authorUrl', { ph: 'https://…', max: 500 }))),
     h('div', { class: 'row' },
       field('Rodapé (texto)', tInput(e, 'footerText', { max: 2048 })),
-      field('Rodapé (ícone, link)', tInput(e, 'footerIcon', { ph: 'https://…', max: 500 }))),
+      field('Rodapé (ícone)', imgPicker(e, 'footerIcon'))),
     chk(e, 'timestamp', 'Mostrar a data e a hora do envio no rodapé'),
     h('div', { class: 'lbl-s' }, 'CAMPOS (opcional)'),
     listEditor(e.fields, () => ({ name: '', value: '', inline: false }), (f) => h('div', {},
@@ -538,6 +675,7 @@ function tabMessages() {
   const messageBlock = (m, mi) => {
     const pv = h('div');
     const drawPv = () => {
+      if (m.layout === 'container') { pv.replaceChildren(msgPreview('', containerPreview(m.container))); return; }
       const has = m.content || m.embeds.some(embedHasContent);
       pv.replaceChildren(has
         ? msgPreview(m.content, m.embeds.filter(embedHasContent).map(embedPreview))
@@ -554,6 +692,14 @@ function tabMessages() {
       m.embeds.length < 10 ? h('button', { class: 'btn ghost', onclick: () => { m.embeds.push(newEmbed()); dirty(); drawEmbs(); drawPv(); } }, '+ Adicionar embed') : null);
     drawEmbs();
     drawPv();
+    const classic = h('div', {},
+      field('Texto fora do embed (opcional)', tArea(m, 'content', Object.assign({ rows: 3, max: 2000 }, MV))),
+      h('div', { class: 'lbl-s' }, 'EMBEDS'),
+      embs);
+    const cont = containerEditor(m.container, MV);
+    const modeBox = h('div');
+    const drawMode = () => { modeBox.replaceChildren(m.layout === 'container' ? cont : classic); drawPv(); };
+    drawMode();
 
     const publish = async () => {
       try {
@@ -569,10 +715,12 @@ function tabMessages() {
       h('div', { class: 'row' },
         field('Nome interno (só você vê)', tInput(m, 'name', { max: 60 })),
         field('Canal onde publicar', sel(m, 'channelId', chOpts()))),
-      field('Texto fora do embed (opcional)', tArea(m, 'content', Object.assign({ rows: 3, max: 2000 }, MV))),
+      field('Layout da mensagem', h('select', { onchange: (ev) => { m.layout = ev.target.value; dirty(); drawMode(); } },
+        h('option', { value: 'embed', selected: m.layout !== 'container' }, 'Embed clássico (barra colorida, campos, rodapé)'),
+        h('option', { value: 'container', selected: m.layout === 'container' }, 'Container (novo, igual ao Discohook: textos, imagens, galeria)')),
+        'Ao trocar o layout de uma mensagem já publicada, o bot apaga a antiga e envia uma nova.'),
       chk(m, 'pingRoles', 'Notificar os cargos marcados no texto (@cargo)'),
-      h('div', { class: 'lbl-s' }, 'EMBEDS'),
-      embs,
+      modeBox,
       h('div', { class: 'lbl-s', style: 'margin-top:14px' }, 'PRÉVIA (simplificada, no Discord pode ficar um pouco diferente)'),
       pv,
       h('div', { class: 'dbtns', style: 'margin-top:14px' },
@@ -588,7 +736,7 @@ function tabMessages() {
       card('Mensagens com embed', 'Monte avisos, regras e anúncios com título, cores, imagens e campos, e publique em um canal. Ao publicar de novo, o bot edita a mesma mensagem (não duplica).'),
       msgs.map(messageBlock),
       msgs.length < 50 ? h('button', { class: 'btn', onclick: () => {
-        msgs.push({ id: Math.random().toString(36).slice(2, 10), name: 'Mensagem ' + (msgs.length + 1), channelId: '', messageId: '', content: '', pingRoles: false, embeds: [newEmbed()] });
+        msgs.push({ id: Math.random().toString(36).slice(2, 10), name: 'Mensagem ' + (msgs.length + 1), channelId: '', messageId: '', content: '', pingRoles: false, layout: 'embed', container: { color: '', spoiler: false, items: [newItem('text')] }, embeds: [newEmbed()] });
         dirty(); draw();
       } }, '+ Nova mensagem') : null);
   };
