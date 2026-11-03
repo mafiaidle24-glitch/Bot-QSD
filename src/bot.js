@@ -688,6 +688,26 @@ client.once(Events.ClientReady, async () => {
   log('Online como ' + client.user.tag + ' em ' + client.guilds.cache.size + ' servidor(es).');
   client.user.setActivity('/rank • /quiz • /piada');
   for (const guild of client.guilds.cache.values()) await registerCommands(guild);
+
+  // ===== Atualiza o banner do bot =====
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    const bannerPath = path.join(__dirname, '..', 'assets', 'banner.png');
+    if (fs.existsSync(bannerPath)) {
+      const banner = fs.readFileSync(bannerPath);
+      const base64 = `data:image/png;base64,${banner.toString('base64')}`;
+      await client.rest.patch('/users/@me', {
+        body: { banner: base64 }
+      });
+      log('Banner do bot atualizado com sucesso!');
+    } else {
+      log('Arquivo de banner não encontrado em assets/banner.png');
+    }
+  } catch (err) {
+    console.error('Erro ao atualizar o banner:', err);
+  }
+  // ====================================
 });
 client.on(Events.GuildCreate, (g) => registerCommands(g));
 client.on(Events.Error, (e) => warn('client', e));
