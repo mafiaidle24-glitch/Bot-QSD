@@ -70,6 +70,24 @@ textarea{resize:vertical;min-height:80px}
 .dbtns{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
 .dbtn{border-radius:8px;padding:8px 14px;font-weight:600;color:#fff;border:1px solid rgba(255,255,255,.08)}
 .dbtn.s1{background:var(--blue)} .dbtn.s2{background:var(--gray)} .dbtn.s3{background:var(--green)} .dbtn.s4{background:var(--red)}
+.lbl-s{font-size:12px;font-weight:700;color:#b5bac1;margin:10px 0 4px}
+.edet{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:10px 0}
+.edet>summary{cursor:pointer;font-weight:600}
+.epv{background:#2b2d31;border-left:4px solid #5865f2;border-radius:4px;padding:8px 14px 12px 12px;max-width:520px;margin-top:8px}
+.epv-row{display:flex;gap:12px}
+.epv-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px;white-space:pre-wrap;word-break:break-word}
+.epv-author{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600}
+.epv-author img,.epv-foot img{width:22px;height:22px;border-radius:50%}
+.epv-title{font-weight:700;font-size:16px}
+.epv-title.link{color:#00a8fc}
+.epv-desc{font-size:14px}
+.epv-fields{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.epv-f{grid-column:1/-1;font-size:14px}
+.epv-f.inl{grid-column:auto}
+.epv-fn{font-weight:700;font-size:13px}
+.epv-img{max-width:100%;border-radius:6px;margin-top:4px}
+.epv-thumb{width:70px;height:70px;object-fit:cover;border-radius:6px;flex:none}
+.epv-foot{display:flex;align-items:center;gap:8px;font-size:12px;color:#b5bac1;margin-top:2px}
 #savebar{position:fixed;left:0;right:0;bottom:-80px;background:var(--panel2);border-top:1px solid var(--line);padding:12px 20px;display:flex;gap:12px;align-items:center;justify-content:center;transition:bottom .2s;z-index:9}
 #savebar.show{bottom:0}
 #toast{position:fixed;top:70px;right:16px;display:flex;flex-direction:column;gap:8px;z-index:20}
@@ -159,7 +177,7 @@ function sel(o, k, options, { empty = '— escolher —', num = false } = {}) {
     options.map((x) => h('option', { value: x.v, selected: String(o[k]) === String(x.v) }, x.t)));
   return s;
 }
-function tArea(o, k, { rows = 4, max = 2000, tools = true } = {}) {
+function tArea(o, k, { rows = 4, max = 2000, tools = true, vars: varList } = {}) {
   const ta = h('textarea', { rows, maxlength: max, oninput: (e) => { o[k] = e.target.value; dirty(); } });
   ta.value = o[k] ?? '';
   if (!tools) return ta;
@@ -174,9 +192,9 @@ function tArea(o, k, { rows = 4, max = 2000, tools = true } = {}) {
       h('option', { value: '' }, ph), opts.map((x) => h('option', { value: x.v }, x.t)));
     return s;
   };
-  const vars = ['{user}', '{username}', '{server}', '{count}', '{level}', '{args}'].map((v) => ({ v, t: v }));
+  const vars = (varList || ['{user}', '{username}', '{server}', '{count}', '{level}', '{args}']).map((v) => ({ v, t: v }));
   return h('div', {}, ta, h('div', { class: 'mbar' },
-    mk('+ variável', vars, insert),
+    vars.length ? mk('+ variável', vars, insert) : null,
     mk('+ mencionar cargo', st.data.roles.map((r) => ({ v: r.id, t: '@' + r.name })), (id) => insert('<@&' + id + '>')),
     mk('+ mencionar canal', st.data.channels.map((c) => ({ v: c.id, t: '#' + c.name })), (id) => insert('<#' + id + '>'))));
 }
@@ -236,7 +254,7 @@ function msgPreview(text, imgEl) {
 
 /* ---------- abas ---------- */
 const TABS = [
-  ['home', '🏠 Início'], ['welcome', '👋 Boas-vindas'], ['leave', '🚪 Saída'], ['roles', '🎛️ Cargos / Botões'],
+  ['home', '🏠 Início'], ['welcome', '👋 Boas-vindas'], ['leave', '🚪 Saída'], ['roles', '🎛️ Cargos / Botões'], ['messages', '📨 Mensagens / Embeds'],
   ['levels', '⭐ Rank / Níveis'], ['commands', '⌨️ Comandos'], ['interaction', '💬 Interação'],
   ['translate', '🌐 Tradução'], ['games', '🎮 Mini jogos'],
 ];
@@ -248,6 +266,7 @@ function tabHome() {
       h('ul', { class: 'cl' },
         h('li', {}, '👋 ', h('b', {}, 'Boas-vindas / Saída'), ': mensagem + imagem com a foto do membro, igual ao seu modelo.'),
         h('li', {}, '🎛️ ', h('b', {}, 'Cargos / Botões'), ': monte painéis com botões coloridos e publique no canal.'),
+        h('li', {}, '📨 ', h('b', {}, 'Mensagens / Embeds'), ': monte avisos e regras com cores, imagens e campos e publique em um canal.'),
         h('li', {}, '⭐ ', h('b', {}, 'Rank / Níveis'), ': XP por mensagem, anúncio de nível e cargos de recompensa.'),
         h('li', {}, '⌨️ ', h('b', {}, 'Comandos'), ': crie comandos como ', h('code', {}, '!regras'), ' sem programar.'),
         h('li', {}, '💬 ', h('b', {}, 'Interação'), ': respostas e reações automáticas a palavras.'),
@@ -457,7 +476,127 @@ function tabGames() {
         field('XP de prêmio por vitória', nInput(g, 'rewardXp', 0, 1000), 'Vale para quiz, pedra-papel-tesoura e adivinhar (precisa de níveis ativos). 0 = sem prêmio.'))));
 }
 
-const TAB_FN = { home: tabHome, welcome: () => tabCard('welcome'), leave: () => tabCard('leave'), roles: tabRoles, levels: tabLevels, commands: tabCommands, interaction: tabInteraction, translate: tabTranslate, games: tabGames };
+/* ---------- Mensagens com embed ---------- */
+function newEmbed() {
+  return { title: '', url: '', description: '', color: '#5865f2', authorName: '', authorIcon: '', authorUrl: '',
+    thumbnail: '', image: '', footerText: '', footerIcon: '', timestamp: false, fields: [] };
+}
+function embedHasContent(e) {
+  return !!(e.title || e.description || e.authorName || e.footerText || e.image || e.thumbnail || (e.fields && e.fields.length));
+}
+function hideOnError(img) { img.addEventListener('error', () => { img.style.display = 'none'; }); return img; }
+
+function embedPreview(e) {
+  const t = (x) => discordText(x);
+  const main = h('div', { class: 'epv-main' });
+  if (e.authorName) main.append(h('div', { class: 'epv-author' }, e.authorIcon ? hideOnError(h('img', { src: e.authorIcon, alt: '' })) : null, h('span', {}, t(e.authorName))));
+  if (e.title) main.append(h('div', { class: 'epv-title' + (e.url ? ' link' : '') }, t(e.title)));
+  if (e.description) main.append(h('div', { class: 'epv-desc' }, t(e.description)));
+  if (e.fields && e.fields.length) {
+    main.append(h('div', { class: 'epv-fields' }, e.fields.map((f) =>
+      h('div', { class: 'epv-f' + (f.inline ? ' inl' : '') }, h('div', { class: 'epv-fn' }, t(f.name)), h('div', { class: 'epv-fv' }, t(f.value))))));
+  }
+  if (e.image) main.append(hideOnError(h('img', { class: 'epv-img', src: e.image, alt: '' })));
+  const foot = [e.footerText, e.timestamp ? 'Hoje às 12:00' : ''].filter(Boolean).join(' • ');
+  if (foot) main.append(h('div', { class: 'epv-foot' }, e.footerIcon ? hideOnError(h('img', { src: e.footerIcon, alt: '' })) : null, h('span', {}, foot)));
+  return h('div', { class: 'epv', style: 'border-left-color:' + e.color },
+    h('div', { class: 'epv-row' }, main, e.thumbnail ? hideOnError(h('img', { class: 'epv-thumb', src: e.thumbnail, alt: '' })) : null));
+}
+
+function tabMessages() {
+  const msgs = st.cfg.messages;
+  const box = h('div');
+  const previews = [];
+  st.onChange = () => previews.forEach((fn) => fn());
+  const MV = { vars: ['{server}', '{count}'] };
+  const IMG_HINT = 'Link direto de imagem que não expire (ex.: imgur, ou um arquivo da pasta public do seu GitHub).';
+
+  const embedEditor = (e) => h('div', {},
+    h('div', { class: 'row' },
+      field('Título', tInput(e, 'title', { max: 256 })),
+      field('Link do título (opcional)', tInput(e, 'url', { ph: 'https://…', max: 500 }))),
+    field('Descrição', tArea(e, 'description', Object.assign({ rows: 6, max: 4000 }, MV)), 'Aceita **negrito**, menções de cargo/canal e as variáveis {server} e {count}.'),
+    h('div', { class: 'row' },
+      field('Cor da barra lateral', cInput(e, 'color')),
+      field('Imagem grande (link)', tInput(e, 'image', { ph: 'https://…/imagem.png', max: 500 }), IMG_HINT),
+      field('Miniatura no canto (link)', tInput(e, 'thumbnail', { ph: 'https://…/mini.png', max: 500 }))),
+    h('div', { class: 'row' },
+      field('Autor (nome)', tInput(e, 'authorName', { max: 256 })),
+      field('Autor (ícone, link)', tInput(e, 'authorIcon', { ph: 'https://…', max: 500 })),
+      field('Autor (link ao clicar)', tInput(e, 'authorUrl', { ph: 'https://…', max: 500 }))),
+    h('div', { class: 'row' },
+      field('Rodapé (texto)', tInput(e, 'footerText', { max: 2048 })),
+      field('Rodapé (ícone, link)', tInput(e, 'footerIcon', { ph: 'https://…', max: 500 }))),
+    chk(e, 'timestamp', 'Mostrar a data e a hora do envio no rodapé'),
+    h('div', { class: 'lbl-s' }, 'CAMPOS (opcional)'),
+    listEditor(e.fields, () => ({ name: '', value: '', inline: false }), (f) => h('div', {},
+      h('div', { class: 'row' },
+        field('Nome do campo', tInput(f, 'name', { max: 256 })),
+        field('Valor', tArea(f, 'value', { rows: 2, max: 1024, tools: false }))),
+      chk(f, 'inline', 'Mostrar lado a lado com os outros campos')), 'Adicionar campo', 25));
+
+  const messageBlock = (m, mi) => {
+    const pv = h('div');
+    const drawPv = () => {
+      const has = m.content || m.embeds.some(embedHasContent);
+      pv.replaceChildren(has
+        ? msgPreview(m.content, m.embeds.filter(embedHasContent).map(embedPreview))
+        : h('p', { class: 'sub' }, 'Preencha o texto ou um embed para ver a prévia.'));
+    };
+    previews.push(drawPv);
+
+    const embs = h('div');
+    const drawEmbs = () => embs.replaceChildren(
+      m.embeds.map((e, ei) => h('details', { class: 'edet', open: ei === 0 },
+        h('summary', {}, 'Embed ' + (ei + 1) + (e.title ? ' — ' + e.title.slice(0, 40) : '')),
+        embedEditor(e),
+        h('button', { class: 'btn danger small', style: 'margin-top:10px', onclick: () => { m.embeds.splice(ei, 1); dirty(); drawEmbs(); drawPv(); } }, 'Remover este embed'))),
+      m.embeds.length < 10 ? h('button', { class: 'btn ghost', onclick: () => { m.embeds.push(newEmbed()); dirty(); drawEmbs(); drawPv(); } }, '+ Adicionar embed') : null);
+    drawEmbs();
+    drawPv();
+
+    const publish = async () => {
+      try {
+        await save();
+        await api('/api/guilds/' + st.gid + '/messages/' + m.id + '/publish', { method: 'POST' });
+        toast(m.messageId ? 'Mensagem atualizada no Discord!' : 'Mensagem publicada no Discord!', 'ok');
+        await reloadData(false);
+      } catch (e) { toast(e.message, 'err'); }
+    };
+
+    return h('div', { class: 'card' },
+      h('h3', {}, '📨 ' + (m.name || 'Mensagem')),
+      h('div', { class: 'row' },
+        field('Nome interno (só você vê)', tInput(m, 'name', { max: 60 })),
+        field('Canal onde publicar', sel(m, 'channelId', chOpts()))),
+      field('Texto fora do embed (opcional)', tArea(m, 'content', Object.assign({ rows: 3, max: 2000 }, MV))),
+      chk(m, 'pingRoles', 'Notificar os cargos marcados no texto (@cargo)'),
+      h('div', { class: 'lbl-s' }, 'EMBEDS'),
+      embs,
+      h('div', { class: 'lbl-s', style: 'margin-top:14px' }, 'PRÉVIA (simplificada, no Discord pode ficar um pouco diferente)'),
+      pv,
+      h('div', { class: 'dbtns', style: 'margin-top:14px' },
+        h('button', { class: 'btn green', onclick: publish }, m.messageId ? '🔄 Atualizar mensagem no Discord' : '📤 Publicar no Discord'),
+        h('button', { class: 'btn danger', onclick: () => {
+          if (confirm('Remover esta mensagem do painel? (a mensagem já publicada continua no Discord)')) { msgs.splice(mi, 1); dirty(); draw(); }
+        } }, 'Remover do painel')));
+  };
+
+  const draw = () => {
+    previews.length = 0;
+    box.replaceChildren(
+      card('Mensagens com embed', 'Monte avisos, regras e anúncios com título, cores, imagens e campos, e publique em um canal. Ao publicar de novo, o bot edita a mesma mensagem (não duplica).'),
+      msgs.map(messageBlock),
+      msgs.length < 50 ? h('button', { class: 'btn', onclick: () => {
+        msgs.push({ id: Math.random().toString(36).slice(2, 10), name: 'Mensagem ' + (msgs.length + 1), channelId: '', messageId: '', content: '', pingRoles: false, embeds: [newEmbed()] });
+        dirty(); draw();
+      } }, '+ Nova mensagem') : null);
+  };
+  draw();
+  return box;
+}
+
+const TAB_FN = { home: tabHome, messages: tabMessages, welcome: () => tabCard('welcome'), leave: () => tabCard('leave'), roles: tabRoles, levels: tabLevels, commands: tabCommands, interaction: tabInteraction, translate: tabTranslate, games: tabGames };
 
 /* ---------- salvar / carregar ---------- */
 async function save() {
