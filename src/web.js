@@ -183,6 +183,15 @@ function startWeb(bot) {
     res.json({ config: clean });
   });
 
+  app.post('/api/guilds/:id/messages/:msgId/publish', requireAuth, guildAccess, wrap(async (req, res) => {
+    try {
+      const link = await bot.publishMessage(req.guild.id, req.params.msgId);
+      res.json({ ok: true, url: link });
+    } catch (e) {
+      res.status(400).json({ error: e.message });
+    }
+  }));
+
   app.post('/api/guilds/:id/panels/:panelId/publish', requireAuth, guildAccess, wrap(async (req, res) => {
     try {
       const link = await bot.publishPanel(req.guild.id, req.params.panelId);
