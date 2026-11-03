@@ -3,6 +3,9 @@ const {
   AttachmentBuilder, PermissionFlagsBits, SlashCommandBuilder, REST, Routes, MessageFlags,
 } = require('discord.js');
 const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
+const uploads = require('./uploads');
 
 const cfgs = require('./config');
 const db = require('./db');
@@ -234,21 +237,73 @@ function embedHasContent(e) {
   return !!(e.title || e.description || e.authorName || e.footerText || e.image || e.thumbnail || e.fields.length);
 }
 
-function buildMessagePayload(guild, m) {
+const V2_FLAG = 1 << 15;
+
+/** Monta o corpo (JSON cru da API) + arquivos anexos. Funciona em qualquer versão do discord.js. */
+function buildMessageBody(guild, m) {
   const sv = (t) => String(t || '').replace(/\{server\}/gi, guild.name).replace(/\{count\}/gi, String(guild.memberCount));
+  const files = [];
+  const names = new Map();
+  // Imagem: link normal, ou arquivo enviado pelo painel (anexado à mensagem).
+  const ref = (src) => {
+    if (!src) return '';
+    if (!uploads.REF.test(src)) return src;
+    if (names.has(src)) return names.get(src);
+    const p = uploads.resolve(guild.id, src);
+    if (!p) return '';
+    const name = 'img' + files.length + '_' + path.basename(p);
+    files.push({ name, data: fs.readFileSync(p) });
+    names.set(src, 'attachment://' + name);
+    return 'attachment://' + name;
+  };
+  const mentions = m.pingRoles ? { parse: ['roles'] } : { parse: [] };
+
+  if (m.layout === 'container') {
+    const inner = [];
+    let chars = 0;
+    let count = 1;
+    const text = (t) => { const v = sv(t).slice(0, 2000); chars += v.length; return { type: 10, content: v }; };
+    for (const it of m.container.items) {
+      if (it.type === 'text') {
+        if (!it.content.trim()) continue;
+        inner.push(text(it.content)); count += 1;
+      } else if (it.type === 'section') {
+        if (!it.content.trim()) continue;
+        const u = ref(it.image);
+        if (u) {
+          const acc = { type: 11, media: { url: u } };
+          if (it.desc) acc.description = it.desc;
+          inner.push({ type: 9, components: [text(it.content)], accessory: acc }); count += 3;
+        } else { inner.push(text(it.content)); count += 1; }
+      } else if (it.type === 'gallery') {
+        const list = it.images.map((g) => ({ media: { url: ref(g.src) }, description: g.desc || undefined })).filter((g) => g.media.url);
+        if (!list.length) continue;
+        inner.push({ type: 12, items: list }); count += 1 + list.length;
+      } else if (it.type === 'separator') {
+        inner.push({ type: 14, divider: it.divider, spacing: it.large ? 2 : 1 }); count += 1;
+      }
+    }
+    if (!inner.length) throw new Error('O container está vazio. Adicione um texto, imagem ou separador.');
+    if (chars > 4000) throw new Error('Os textos do container passam de 4000 caracteres no total (limite do Discord). Reduza os textos.');
+    if (count > 40) throw new Error('Componentes demais (limite do Discord: 40). Remova alguns itens ou imagens.');
+    const box = { type: 17, components: inner, spoiler: m.container.spoiler };
+    if (m.container.color) box.accent_color = parseInt(m.container.color.slice(1), 16);
+    return { body: { flags: V2_FLAG, components: [box], allowed_mentions: mentions }, files };
+  }
+
   const embeds = [];
   for (const e of m.embeds.filter(embedHasContent)) {
     const em = new EmbedBuilder().setColor(e.color);
     if (e.title) em.setTitle(sv(e.title));
     if (e.url && e.title) em.setURL(e.url);
     if (e.description) em.setDescription(sv(e.description));
-    if (e.authorName) em.setAuthor({ name: sv(e.authorName), iconURL: e.authorIcon || undefined, url: e.authorUrl || undefined });
-    if (e.thumbnail) em.setThumbnail(e.thumbnail);
-    if (e.image) em.setImage(e.image);
-    if (e.footerText) em.setFooter({ text: sv(e.footerText), iconURL: e.footerIcon || undefined });
+    if (e.authorName) em.setAuthor({ name: sv(e.authorName), iconURL: ref(e.authorIcon) || undefined, url: e.authorUrl || undefined });
+    if (e.thumbnail && ref(e.thumbnail)) em.setThumbnail(ref(e.thumbnail));
+    if (e.image && ref(e.image)) em.setImage(ref(e.image));
+    if (e.footerText) em.setFooter({ text: sv(e.footerText), iconURL: ref(e.footerIcon) || undefined });
     if (e.timestamp) em.setTimestamp();
     if (e.fields.length) em.addFields(e.fields.map((f) => ({ name: sv(f.name), value: sv(f.value), inline: f.inline })));
-    embeds.push(em);
+    embeds.push(em.toJSON());
   }
   const content = sv(m.content);
   if (!content && !embeds.length) throw new Error('A mensagem está vazia. Escreva um texto ou preencha pelo menos um embed (título, descrição, imagem...).');
@@ -256,11 +311,7 @@ function buildMessagePayload(guild, m) {
     sum + e.title.length + e.description.length + e.authorName.length + e.footerText.length +
     e.fields.reduce((a, f) => a + f.name.length + f.value.length, 0), 0);
   if (total > 6000) throw new Error('Os embeds passam de 6000 caracteres no total (limite do Discord). Reduza os textos.');
-  return {
-    content: content || '',
-    embeds,
-    allowedMentions: m.pingRoles ? { parse: ['roles'] } : { parse: [] },
-  };
+  return { body: { content: content || '', embeds, allowed_mentions: mentions }, files };
 }
 
 async function publishMessage(guildId, msgId) {
@@ -274,18 +325,32 @@ async function publishMessage(guildId, msgId) {
   const channel = await guild.channels.fetch(m.channelId).catch(() => null);
   if (!channel || !channel.isTextBased()) throw new Error('Canal inválido ou sem acesso para o bot.');
 
-  const payload = buildMessagePayload(guild, m);
-  let msg = null;
-  if (m.messageId) {
-    msg = await channel.messages.fetch(m.messageId).catch(() => null);
-    if (msg && msg.author.id === client.user.id) await msg.edit(payload);
-    else msg = null;
+  const { body, files } = buildMessageBody(guild, m);
+  body.attachments = files.map((f, n) => ({ id: n, filename: f.name }));
+  const rest = client.rest;
+  let sentId = null;
+  try {
+    if (m.messageId) {
+      const old = await rest.get(Routes.channelMessage(channel.id, m.messageId)).catch(() => null);
+      if (old && old.author && old.author.id === client.user.id) {
+        try {
+          await rest.patch(Routes.channelMessage(channel.id, m.messageId), { body, files });
+          sentId = m.messageId;
+        } catch {
+          // Ex.: trocou entre embed e container (o Discord não deixa converter): apaga e envia de novo.
+          await rest.delete(Routes.channelMessage(channel.id, m.messageId)).catch(() => {});
+        }
+      }
+    }
+    if (!sentId) {
+      const sent = await rest.post(Routes.channelMessages(channel.id), { body, files });
+      sentId = sent.id;
+      cfgs.setMessageRef(guildId, msgId, sentId);
+    }
+  } catch (e) {
+    throw new Error('O Discord recusou a mensagem: ' + (e.rawError?.message || e.message));
   }
-  if (!msg) {
-    msg = await channel.send(payload);
-    cfgs.setMessageRef(guildId, msgId, msg.id);
-  }
-  return msg.url;
+  return 'https://discord.com/channels/' + guild.id + '/' + channel.id + '/' + sentId;
 }
 
 async function handleRoleButton(i) {
@@ -688,26 +753,6 @@ client.once(Events.ClientReady, async () => {
   log('Online como ' + client.user.tag + ' em ' + client.guilds.cache.size + ' servidor(es).');
   client.user.setActivity('/rank • /quiz • /piada');
   for (const guild of client.guilds.cache.values()) await registerCommands(guild);
-
-  // ===== Atualiza o banner do bot =====
-  try {
-    const fs = require('fs');
-    const path = require('path');
-    const bannerPath = path.join(__dirname, '..', 'assets', 'banner.png');
-    if (fs.existsSync(bannerPath)) {
-      const banner = fs.readFileSync(bannerPath);
-      const base64 = `data:image/png;base64,${banner.toString('base64')}`;
-      await client.rest.patch('/users/@me', {
-        body: { banner: base64 }
-      });
-      log('Banner do bot atualizado com sucesso!');
-    } else {
-      log('Arquivo de banner não encontrado em assets/banner.png');
-    }
-  } catch (err) {
-    console.error('Erro ao atualizar o banner:', err);
-  }
-  // ====================================
 });
 client.on(Events.GuildCreate, (g) => registerCommands(g));
 client.on(Events.Error, (e) => warn('client', e));
