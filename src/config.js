@@ -66,6 +66,7 @@ function defaults() {
       subtitleColor: '#d0d0d0',
     },
     panels: [],
+    messages: [],
     levels: {
       enabled: true,
       xpMin: 15,
@@ -115,6 +116,27 @@ function sanitizeCard(x, d, welcome) {
   return o;
 }
 
+function sanitizeEmbed(e) {
+  e = e && typeof e === 'object' ? e : {};
+  return {
+    title: str(e.title, 256),
+    url: url(e.url),
+    description: str(e.description, 4000),
+    color: col(e.color, '#5865f2'),
+    authorName: str(e.authorName, 256),
+    authorIcon: url(e.authorIcon),
+    authorUrl: url(e.authorUrl),
+    thumbnail: url(e.thumbnail),
+    image: url(e.image),
+    footerText: str(e.footerText, 2048),
+    footerIcon: url(e.footerIcon),
+    timestamp: bool(e.timestamp, false),
+    fields: arr(e.fields, 25)
+      .map((f) => ({ name: str(f?.name, 256), value: str(f?.value, 1024), inline: bool(f?.inline, false) }))
+      .filter((f) => f.name && f.value),
+  };
+}
+
 function newId() {
   return crypto.randomBytes(4).toString('hex');
 }
@@ -123,6 +145,7 @@ function sanitize(input, old) {
   const d = defaults();
   const i = input && typeof input === 'object' ? input : {};
   const oldPanels = new Map((old?.panels || []).map((p) => [p.id, p]));
+  const oldMsgs = new Map((old?.messages || []).map((m) => [m.id, m]));
 
   const out = {};
   out.welcome = sanitizeCard(i.welcome, d.welcome, true);
@@ -156,6 +179,24 @@ function sanitize(input, old) {
       color: col(p.color, '#5865f2'),
       mode: oneOf(p.mode, ['toggle', 'single'], 'toggle'),
       buttons,
+    };
+  });
+
+  // Mensagens com embed (construtor)
+  const usedMsgIds = new Set();
+  out.messages = arr(i.messages, 50).map((m) => {
+    m = m && typeof m === 'object' ? m : {};
+    let id = typeof m.id === 'string' && /^[a-z0-9]{4,12}$/.test(m.id) ? m.id : newId();
+    while (usedMsgIds.has(id)) id = newId();
+    usedMsgIds.add(id);
+    return {
+      id,
+      name: str(m.name, 60, 'Mensagem'),
+      channelId: sid(m.channelId),
+      messageId: oldMsgs.get(id)?.messageId || '',
+      content: str(m.content, 2000),
+      pingRoles: bool(m.pingRoles, false),
+      embeds: arr(m.embeds, 10).map(sanitizeEmbed),
     };
   });
 
@@ -272,6 +313,15 @@ function validate(guildId, input) {
   return sanitize(input, getConfig(guildId));
 }
 
+function setMessageRef(guildId, id, messageId) {
+  const cfg = getConfig(guildId);
+  const m = cfg.messages.find((x) => x.id === id);
+  if (!m) return;
+  m.messageId = messageId;
+  db.data.guilds[guildId] = cfg;
+  db.save();
+}
+
 function setPanelMessage(guildId, panelId, messageId) {
   const cfg = getConfig(guildId);
   const p = cfg.panels.find((x) => x.id === panelId);
@@ -281,4 +331,4 @@ function setPanelMessage(guildId, panelId, messageId) {
   db.save();
 }
 
-module.exports = { defaults, getConfig, setConfig, validate, setPanelMessage, newId };
+module.exports = { defaults, getConfig, setConfig, validate, setPanelMessage, setMessageRef, newId };
