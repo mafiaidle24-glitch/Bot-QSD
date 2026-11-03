@@ -33,6 +33,9 @@ const url = (v) => {
   }
 };
 
+// Imagem: link http(s) ou arquivo enviado pelo painel ("up:<id>.png").
+const img = (v) => (typeof v === 'string' && /^up:[a-f0-9]{12}\.(png|jpg|gif|webp)$/.test(v) ? v : url(v));
+
 function defaults() {
   return {
     welcome: {
@@ -124,16 +127,37 @@ function sanitizeEmbed(e) {
     description: str(e.description, 4000),
     color: col(e.color, '#5865f2'),
     authorName: str(e.authorName, 256),
-    authorIcon: url(e.authorIcon),
+    authorIcon: img(e.authorIcon),
     authorUrl: url(e.authorUrl),
-    thumbnail: url(e.thumbnail),
-    image: url(e.image),
+    thumbnail: img(e.thumbnail),
+    image: img(e.image),
     footerText: str(e.footerText, 2048),
-    footerIcon: url(e.footerIcon),
+    footerIcon: img(e.footerIcon),
     timestamp: bool(e.timestamp, false),
     fields: arr(e.fields, 25)
       .map((f) => ({ name: str(f?.name, 256), value: str(f?.value, 1024), inline: bool(f?.inline, false) }))
       .filter((f) => f.name && f.value),
+  };
+}
+
+function sanitizeContainer(c) {
+  c = c && typeof c === 'object' ? c : {};
+  const items = [];
+  for (const x of arr(c.items, 25)) {
+    if (!x || typeof x !== 'object') continue;
+    if (x.type === 'text') items.push({ type: 'text', content: str(x.content, 2000) });
+    else if (x.type === 'section') items.push({ type: 'section', content: str(x.content, 2000), image: img(x.image), desc: str(x.desc, 256) });
+    else if (x.type === 'gallery') {
+      items.push({
+        type: 'gallery',
+        images: arr(x.images, 10).map((g) => ({ src: img(g?.src), desc: str(g?.desc, 256) })).filter((g) => g.src),
+      });
+    } else if (x.type === 'separator') items.push({ type: 'separator', divider: bool(x.divider, true), large: bool(x.large, false) });
+  }
+  return {
+    color: typeof c.color === 'string' && HEX.test(c.color) ? c.color : '',
+    spoiler: bool(c.spoiler, false),
+    items,
   };
 }
 
@@ -196,6 +220,8 @@ function sanitize(input, old) {
       messageId: oldMsgs.get(id)?.messageId || '',
       content: str(m.content, 2000),
       pingRoles: bool(m.pingRoles, false),
+      layout: oneOf(m.layout, ['embed', 'container'], 'embed'),
+      container: sanitizeContainer(m.container),
       embeds: arr(m.embeds, 10).map(sanitizeEmbed),
     };
   });
