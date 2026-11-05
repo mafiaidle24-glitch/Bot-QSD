@@ -627,7 +627,8 @@ async function handlePptButton(i) {
   if (won) await reward(i.guild, i.member, i.channel);
 }
 
-const langChoices = LANGS.map(([name, value]) => ({ name, value }));
+// O Discord aceita no máximo 25 opções numa lista de escolha.
+const langChoices = LANGS.slice(0, 25).map(([name, value]) => ({ name, value }));
 const slashCommands = [
   new SlashCommandBuilder().setName('rank').setDescription('Mostra o cartão de nível').addUserOption((o) => o.setName('membro').setDescription('Outro membro')),
   new SlashCommandBuilder().setName('top').setDescription('Ranking de níveis do servidor'),
