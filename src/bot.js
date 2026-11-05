@@ -6,6 +6,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const uploads = require('./uploads');
+const wiki = require('./wiki');
 
 const cfgs = require('./config');
 const db = require('./db');
@@ -495,6 +496,7 @@ async function handleXp(msg, cfg) {
 client.on(Events.MessageCreate, async (msg) => {
   if (!msg.guild || msg.author.bot || msg.webhookId) return;
   const cfg = cfgs.getConfig(msg.guild.id);
+  try { if (await wiki.handleMessage(msg)) return; } catch (e) { warn('wiki', e); }
   try { if (await handleCustomCommand(msg, cfg)) return; } catch (e) { warn('comando personalizado', e); }
   try { await handleGuess(msg); } catch (e) { warn('jogo de adivinhar', e); }
   try { await handleXp(msg, cfg); } catch (e) { warn('xp', e); }
