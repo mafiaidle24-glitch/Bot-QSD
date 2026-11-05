@@ -70,6 +70,18 @@ function defaults() {
     },
     panels: [],
     messages: [],
+    wiki: {
+      channels: [], // [{ channelId, rarities: [] }]  (rarities vazio = todas)
+      who: 'owner', // 'owner' | 'roles' | 'everyone'
+      roleIds: [],
+      deleteCommand: true,
+      listChannelId: '',
+      listMessageIds: [],
+      intro: '',
+      color: '#3aa0ff',
+      rarities: [{ name: 'Mythical', emoji: '' }, { name: 'Legendary', emoji: '' }, { name: 'Epic', emoji: '' }, { name: 'Rare', emoji: '' }],
+      entries: [],
+    },
     levels: {
       enabled: true,
       xpMin: 15,
@@ -161,6 +173,66 @@ function sanitizeContainer(c) {
   };
 }
 
+// Wiki de personagens: comandos como !ateu que respondem com imagens.
+function sanitizeWiki(w, old) {
+  w = w && typeof w === 'object' ? w : {};
+  const rarities = arr(w.rarities, 10)
+    .map((r) => ({ name: str(r?.name, 30).trim(), emoji: str(r?.emoji, 64).trim() }))
+    .filter((r) => r.name);
+  const rar = rarities.length ? rarities : defaults().wiki.rarities;
+  const rarNames = rar.map((r) => r.name);
+  const clean = (s) => str(s, 32).toLowerCase().replace(/\s+/g, '').replace(/^[^\p{L}\p{N}_-]+/u, '');
+  const used = new Set();
+  const usedIds = new Set();
+  const entries = [];
+  for (const e of arr(w.entries, 300)) {
+    if (!e || typeof e !== 'object') continue;
+    const name = clean(e.name);
+    if (!name || used.has(name)) continue;
+    used.add(name);
+    const aliases = [];
+    for (const a of arr(e.aliases, 10).map(clean)) {
+      if (!a || used.has(a)) continue;
+      used.add(a);
+      aliases.push(a);
+    }
+    let id = typeof e.id === 'string' && /^[a-z0-9]{4,12}$/.test(e.id) ? e.id : newId();
+    while (usedIds.has(id)) id = newId();
+    usedIds.add(id);
+    entries.push({
+      id,
+      name,
+      aliases,
+      rarity: oneOf(e.rarity, rarNames, rarNames[0]),
+      text: str(e.text, 1500),
+      images: arr(e.images, 4).map(img).filter(Boolean),
+    });
+  }
+  const channels = [];
+  const seenCh = new Set();
+  for (const c of arr(w.channels, 20)) {
+    const id = sid(c?.channelId);
+    if (!id || seenCh.has(id)) continue;
+    seenCh.add(id);
+    channels.push({ channelId: id, rarities: [...new Set(arr(c.rarities, 10).filter((n) => rarNames.includes(n)))] });
+  }
+  for (const id of [...idList(w.channelIds, 20), sid(w.channelId)]) { // versões antigas
+    if (id && !seenCh.has(id)) { seenCh.add(id); channels.push({ channelId: id, rarities: [] }); }
+  }
+  return {
+    channels,
+    who: oneOf(w.who, ['owner', 'roles', 'everyone'], 'owner'),
+    roleIds: idList(w.roleIds, 10),
+    deleteCommand: bool(w.deleteCommand, true),
+    listChannelId: sid(w.listChannelId),
+    listMessageIds: idList(old?.wiki?.listMessageIds, 20),
+    intro: str(w.intro, 1500),
+    color: col(w.color, '#3aa0ff'),
+    rarities: rar,
+    entries,
+  };
+}
+
 function newId() {
   return crypto.randomBytes(4).toString('hex');
 }
@@ -225,6 +297,8 @@ function sanitize(input, old) {
       embeds: arr(m.embeds, 10).map(sanitizeEmbed),
     };
   });
+
+  out.wiki = sanitizeWiki(i.wiki, old);
 
   // Níveis
   const l = i.levels && typeof i.levels === 'object' ? i.levels : {};
@@ -348,6 +422,13 @@ function setMessageRef(guildId, id, messageId) {
   db.save();
 }
 
+function setWikiListIds(guildId, ids) {
+  const cfg = getConfig(guildId);
+  cfg.wiki.listMessageIds = idList(ids, 20);
+  db.data.guilds[guildId] = cfg;
+  db.save();
+}
+
 function setPanelMessage(guildId, panelId, messageId) {
   const cfg = getConfig(guildId);
   const p = cfg.panels.find((x) => x.id === panelId);
@@ -357,4 +438,4 @@ function setPanelMessage(guildId, panelId, messageId) {
   db.save();
 }
 
-module.exports = { defaults, getConfig, setConfig, validate, setPanelMessage, setMessageRef, newId };
+module.exports = { defaults, getConfig, setConfig, validate, setPanelMessage, setMessageRef, setWikiListIds, newId };
