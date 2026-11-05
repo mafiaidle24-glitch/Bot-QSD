@@ -44,4 +44,59 @@ function pathByName(gid, name) {
   return fs.existsSync(p) ? p : null;
 }
 
-module.exports = { save, resolve, pathByName, REF, MAX: 8 * 1024 * 1024 };
+/** Recorta a imagem em círculo (PNG com fundo transparente, 256x256). */
+async function round(buf) {
+  if (!kind(buf)) throw new Error('Formato não suportado. Use PNG, JPG, GIF ou WEBP.');
+  const { createCanvas, loadImage } = require('@napi-rs/canvas');
+  const img = await loadImage(buf);
+  const S = 256;
+  const side = Math.min(img.width, img.height);
+  const canvas = createCanvas(S, S);
+  const ctx = canvas.getContext('2d');
+  ctx.beginPath();
+  ctx.arc(S / 2, S / 2, S / 2, 0, Math.PI * 2);
+  ctx.closePath();
+  ctx.clip();
+  ctx.drawImage(img, (img.width - side) / 2, (img.height - side) / 2, side, side, 0, 0, S, S);
+  return canvas.toBuffer('image/png');
+}
+
+/**
+ * Reduz a imagem (largura máx. 1000 px, ou 1400 em alta qualidade) e salva em JPEG leve.
+ * Processa uma de cada vez para não estourar a memória. Se algo falhar, devolve a original.
+ */
+let chain = Promise.resolve();
+function compress(buf, opts) {
+  const run = () => compressNow(buf, opts || {});
+  const p = chain.then(run, run);
+  chain = p.catch(() => {});
+  return p;
+}
+
+async function compressNow(buf, { hq } = {}) {
+  const k = kind(buf);
+  if (!k) throw new Error('Formato não suportado. Use PNG, JPG, GIF ou WEBP.');
+  if (k === 'gif') return buf;
+  try {
+    const { createCanvas, loadImage } = require('@napi-rs/canvas');
+    const img = await loadImage(buf);
+    if (img.width * img.height > 40000000) throw new Error('Imagem enorme demais.');
+    const maxW = hq ? 1400 : 1000;
+    const maxH = hq ? 3000 : 2400;
+    const scale = Math.min(1, maxW / img.width, maxH / img.height);
+    const w = Math.max(1, Math.round(img.width * scale));
+    const h = Math.max(1, Math.round(img.height * scale));
+    const canvas = createCanvas(w, h);
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#1e1f22';
+    ctx.fillRect(0, 0, w, h);
+    ctx.drawImage(img, 0, 0, w, h);
+    const out = canvas.toBuffer('image/jpeg', hq ? 92 : 85);
+    return out.length < buf.length ? out : buf;
+  } catch (e) {
+    console.error('[uploads] compressão falhou, mantendo a original:', e.message);
+    return buf;
+  }
+}
+
+module.exports = { save, resolve, pathByName, round, compress, REF, MAX: 8 * 1024 * 1024 };
