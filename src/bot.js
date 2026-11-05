@@ -7,12 +7,12 @@ const fs = require('fs');
 const path = require('path');
 const uploads = require('./uploads');
 const wiki = require('./wiki');
-
 const cfgs = require('./config');
 const db = require('./db');
 const { renderCard, renderRank } = require('./card');
 const { translate, LANGS, FLAGS, baseLang, flagLang, langName } = require('./translate');
 const { JOKES, FACTS, QUIZ, EIGHT_BALL } = require('./content');
+const tickets = require('./tickets');
 
 const EPHEMERAL = MessageFlags.Ephemeral;
 const BASE_URL = (process.env.BASE_URL || 'http://localhost:3000').replace(/\/$/, '');
@@ -111,7 +111,6 @@ async function giveXp(guild, member, amount, channel) {
   db.save();
   const after = levelInfo(u.xp).level;
   if (after <= before) return;
-
   await applyRewards(guild, member, after, cfg);
   if (cfg.announce === 'off') return;
   let target = channel;
@@ -129,7 +128,6 @@ async function sendCard(kind, guild, who) {
   const member = who.user ? who : null;
   const channel = cfg.channelId ? await guild.channels.fetch(cfg.channelId).catch(() => null) : null;
   if (!channel || !channel.isTextBased()) throw new Error('Escolha um canal válido (que o bot consiga ver) para essa mensagem.');
-
   const payload = {
     content: fmt(cfg.message, { member, user, guild }) || undefined,
     allowedMentions: kind === 'welcome' ? { users: [user.id], roles: [] } : { parse: [] },
@@ -188,7 +186,6 @@ function buildPanelPayload(guild, panel) {
   });
   const rows = [];
   for (let i = 0; i < buttons.length; i += 5) rows.push(new ActionRowBuilder().addComponents(buttons.slice(i, i + 5)));
-
   const text = panel.content || (panel.title ? '' : 'Escolha seus cargos clicando nos botões abaixo:');
   const payload = { components: rows, allowedMentions: { parse: [] } };
   if (panel.useEmbed && (panel.title || panel.content)) {
@@ -219,7 +216,6 @@ async function publishPanel(guildId, panelId) {
   if (!panel.buttons.length) throw new Error('Adicione pelo menos um botão com cargo.');
   const channel = await guild.channels.fetch(panel.channelId).catch(() => null);
   if (!channel || !channel.isTextBased()) throw new Error('Canal inválido ou sem acesso para o bot.');
-
   const payload = buildPanelPayload(guild, panel);
   let msg = null;
   if (panel.messageId) {
@@ -395,7 +391,6 @@ async function handleTranslate(msg, cfg) {
   const text = msg.cleanContent.trim();
   if (text.length < 2 || /^(https?:\/\/\S+\s*)+$/.test(text)) return;
   if (cfg.commands.prefix && text.startsWith(cfg.commands.prefix)) return;
-
   const lines = [];
   for (const target of rule.targets) {
     try {
@@ -411,23 +406,30 @@ async function handleTranslate(msg, cfg) {
   }
 }
 
+// Tradução por reação de bandeira. Tem logs "[bandeira]" em cada etapa para achar onde falha.
 client.on(Events.MessageReactionAdd, async (reaction, user) => {
+  const dbg = (m) => console.log('[bandeira] ' + m);
   try {
-    if (user.bot) return;
+    dbg('reação ' + reaction.emoji.name + ' de ' + user.username);
+    if (user.bot) return dbg('ignorado: é bot');
     const lang = flagLang(reaction.emoji.name);
-    if (!lang) return;
+    if (!lang) return dbg('ignorado: emoji sem idioma');
     if (reaction.partial) await reaction.fetch();
     const msg = reaction.message.partial ? await reaction.message.fetch() : reaction.message;
-    if (!msg.guild) return;
+    if (!msg.guild) return dbg('ignorado: sem servidor');
     const t = cfgs.getConfig(msg.guild.id).translate;
-    if (!t.enabled || !t.flagReactions) return;
+    if (!t.enabled || !t.flagReactions) return dbg('ignorado: desativado no painel');
     const text = msg.cleanContent?.trim();
-    if (!text || onCooldown('flag:' + msg.id + ':' + lang, 8000)) return;
+    if (!text) return dbg('ignorado: mensagem sem texto');
+    if (onCooldown('flag:' + msg.id + ':' + lang, 8000)) return dbg('ignorado: cooldown');
+    dbg('traduzindo para ' + lang);
+
     // Aviso curto que some sozinho (para a pessoa saber que o bot viu a bandeira).
     const note = async (content) => {
       const m = await msg.reply({ content, allowedMentions: { parse: [], repliedUser: false } }).catch(() => null);
       if (m) setTimeout(() => m.delete().catch(() => {}), 7000);
     };
+
     let r;
     try {
       r = await translate(text, lang);
@@ -437,10 +439,12 @@ client.on(Events.MessageReactionAdd, async (reaction, user) => {
     }
     if (!r.text) return note('😕 Não consegui traduzir essa mensagem.');
     if (r.text.trim() === text) return note('ℹ️ Essa mensagem já está em **' + langName(lang) + '** (ou não há o que traduzir).');
+
     await msg.reply({
       content: ('🌐 **' + langName(r.from) + ' → ' + langName(lang) + '** (pedido de ' + dn(null, user) + ')\n' + r.text).slice(0, 1900),
       allowedMentions: { parse: [], repliedUser: false },
     });
+    dbg('resposta enviada');
   } catch (e) {
     warn('tradução por bandeira', e);
   }
@@ -455,7 +459,6 @@ async function handleCustomCommand(msg, cfg) {
   const cmd = cfg.commands.list.find((c) => c.name === name || c.aliases.includes(name));
   if (!cmd) return false;
   if (onCooldown('cmd:' + msg.guildId + ':' + msg.author.id + ':' + cmd.name, 2000)) return true;
-
   const text = fmt(cmd.response, { member: msg.member, user: msg.author, guild: msg.guild, args: rest.join(' '), channel: msg.channel });
   const allowedMentions = { users: [msg.author.id], roles: [] };
   if (cmd.embed) {
@@ -470,7 +473,6 @@ async function handleInteraction(msg, cfg) {
   const it = cfg.interaction;
   const content = msg.content;
   if (!content) return;
-
   if (it.mentionReply && msg.mentions.users.has(client.user.id) && !msg.mentions.everyone && it.mentionReplies.length) {
     if (!onCooldown('mention:' + msg.channelId, 5000)) {
       const text = fmt(pick(it.mentionReplies), { member: msg.member, user: msg.author, guild: msg.guild, channel: msg.channel });
@@ -478,11 +480,9 @@ async function handleInteraction(msg, cfg) {
     }
     return;
   }
-
   for (const r of it.reactions) {
     if (matches(content, r.trigger, r.match)) await msg.react(r.emoji).catch(() => {});
   }
-
   for (const t of it.triggers) {
     if (!matches(content, t.trigger, t.match)) continue;
     if (onCooldown('trg:' + msg.channelId + ':' + t.trigger.toLowerCase(), 10000)) break;
@@ -601,7 +601,6 @@ async function handleQuizButton(i) {
   state.tried.add(i.user.id);
   const chosen = state.opts[Number(idxStr)];
   if (!chosen?.correct) return i.reply({ content: '❌ Errou! Aguarde os outros...', flags: EPHEMERAL });
-
   state.done = true;
   clearTimeout(state.timer);
   quizzes.delete(id);
@@ -629,6 +628,7 @@ async function handlePptButton(i) {
 
 // O Discord aceita no máximo 25 opções numa lista de escolha.
 const langChoices = LANGS.slice(0, 25).map(([name, value]) => ({ name, value }));
+
 const slashCommands = [
   new SlashCommandBuilder().setName('rank').setDescription('Mostra o cartão de nível').addUserOption((o) => o.setName('membro').setDescription('Outro membro')),
   new SlashCommandBuilder().setName('top').setDescription('Ranking de níveis do servidor'),
@@ -649,6 +649,8 @@ const slashCommands = [
   new SlashCommandBuilder().setName('bola8').setDescription('Pergunte à bola 8 mágica')
     .addStringOption((o) => o.setName('pergunta').setDescription('Sua pergunta').setRequired(true).setMaxLength(200)),
   new SlashCommandBuilder().setName('painel').setDescription('Link do painel de configuração do bot'),
+  new SlashCommandBuilder().setName('ticket').setDescription('Publica o painel de tickets neste canal (somente administradores)')
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 ].map((c) => c.setDMPermission(false).toJSON());
 
 async function registerCommands(guild) {
@@ -744,6 +746,18 @@ async function runSlash(i) {
       return i.reply('🎱 **' + i.options.getString('pergunta') + '**\n' + pick(EIGHT_BALL));
     case 'painel':
       return i.reply({ content: '⚙️ Painel de configuração: ' + BASE_URL, flags: EPHEMERAL });
+    case 'ticket': {
+      if (!i.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
+        return i.reply({ content: 'Só administradores podem publicar o painel de tickets.', flags: EPHEMERAL });
+      }
+      try {
+        await i.channel.send(tickets.buildTicketPanel());
+      } catch (e) {
+        warn('painel de tickets', e);
+        return i.reply({ content: 'Não consegui publicar o painel aqui. O bot precisa ver este canal e poder enviar mensagens e embeds nele.', flags: EPHEMERAL });
+      }
+      return i.reply({ content: '✅ Painel de tickets publicado neste canal.', flags: EPHEMERAL });
+    }
   }
 }
 
@@ -755,6 +769,7 @@ client.on(Events.InteractionCreate, async (i) => {
       if (i.customId.startsWith('rp:')) return await handleRoleButton(i);
       if (i.customId.startsWith('quiz:')) return await handleQuizButton(i);
       if (i.customId.startsWith('ppt:')) return await handlePptButton(i);
+      if (i.customId.startsWith('ticket:')) return await tickets.handleTicketButton(i);
     }
   } catch (e) {
     warn('interação', e);
@@ -776,7 +791,7 @@ client.once(Events.ClientReady, async () => {
       const banner = fs.readFileSync(bannerPath);
       const base64 = 'data:image/png;base64,' + banner.toString('base64');
       await client.rest.patch('/users/@me', {
-        body: { banner: base64 }
+        body: { banner: base64 },
       });
       log('Banner do bot atualizado com sucesso!');
     } else {
@@ -787,6 +802,7 @@ client.once(Events.ClientReady, async () => {
   }
   // ====================================
 });
+
 client.on(Events.GuildCreate, (g) => registerCommands(g));
 client.on(Events.Error, (e) => warn('client', e));
 
