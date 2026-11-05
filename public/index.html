@@ -102,6 +102,11 @@ textarea{resize:vertical;min-height:80px}
 .imgp img{max-height:70px;max-width:140px;border-radius:6px;border:1px solid var(--line);object-fit:cover}
 .itbar{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
 .ithead{font-weight:700;font-size:13px;margin-bottom:6px;color:var(--muted,#b5bac1)}
+.wth{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+.wth .w{position:relative}
+.wth img{height:80px;border-radius:6px;border:1px solid var(--line);object-fit:cover}
+.wth .x{position:absolute;top:-6px;right:-6px;padding:2px 7px}
+.edet.bad{border-color:#da373c}
 #savebar{position:fixed;left:0;right:0;bottom:-80px;background:var(--panel2);border-top:1px solid var(--line);padding:12px 20px;display:flex;gap:12px;align-items:center;justify-content:center;transition:bottom .2s;z-index:9}
 #savebar.show{bottom:0}
 #toast{position:fixed;top:70px;right:16px;display:flex;flex-direction:column;gap:8px;z-index:20}
@@ -268,7 +273,7 @@ function msgPreview(text, imgEl) {
 
 /* ---------- abas ---------- */
 const TABS = [
-  ['home', '🏠 Início'], ['welcome', '👋 Boas-vindas'], ['leave', '🚪 Saída'], ['roles', '🎛️ Cargos / Botões'], ['messages', '📨 Mensagens / Embeds'],
+  ['home', '🏠 Início'], ['welcome', '👋 Boas-vindas'], ['leave', '🚪 Saída'], ['roles', '🎛️ Cargos / Botões'], ['messages', '📨 Mensagens / Embeds'], ['wiki', '📖 Wiki de Capos'],
   ['levels', '⭐ Rank / Níveis'], ['commands', '⌨️ Comandos'], ['interaction', '💬 Interação'],
   ['translate', '🌐 Tradução'], ['games', '🎮 Mini jogos'],
 ];
@@ -497,7 +502,7 @@ function imgSrc(v) {
   return v.indexOf('up:') === 0 ? '/api/guilds/' + st.gid + '/uploads/' + v.slice(3) : v;
 }
 
-function imgPicker(o, k) {
+function imgPicker(o, k, canRound) {
   const box = h('div', { class: 'imgp' });
   const draw = () => {
     const v = o[k] || '';
@@ -507,12 +512,13 @@ function imgPicker(o, k) {
     txt.value = mine ? '' : v;
     if (mine) txt.disabled = true;
     const file = h('input', { type: 'file', accept: 'image/png,image/jpeg,image/gif,image/webp', style: 'display:none' });
+    let wantRound = false;
     file.addEventListener('change', async () => {
       const f = file.files && file.files[0];
       if (!f) return;
       if (f.size > 8 * 1024 * 1024) { toast('Imagem muito grande (máx. 8 MB).', 'err'); return; }
       try {
-        const r = await fetch('/api/guilds/' + st.gid + '/uploads', { method: 'POST', credentials: 'same-origin',
+        const r = await fetch('/api/guilds/' + st.gid + '/uploads' + (wantRound ? '?round=1' : ''), { method: 'POST', credentials: 'same-origin',
           headers: { 'Content-Type': 'application/octet-stream' }, body: await f.arrayBuffer() });
         const j = await r.json().catch(() => ({}));
         if (!r.ok) throw new Error(j.error || 'Erro ' + r.status);
@@ -522,7 +528,8 @@ function imgPicker(o, k) {
     });
     box.replaceChildren(
       h('div', { class: 'ir' }, txt,
-        h('button', { class: 'btn ghost small', type: 'button', onclick: () => file.click() }, '📁 Enviar do aparelho'),
+        h('button', { class: 'btn ghost small', type: 'button', onclick: () => { wantRound = false; file.value = ''; file.click(); } }, '📁 Enviar do aparelho'),
+        canRound ? h('button', { class: 'btn ghost small', type: 'button', onclick: () => { wantRound = true; file.value = ''; file.click(); } }, '⭕ Enviar redonda') : null,
         v ? h('button', { class: 'btn danger small', type: 'button', onclick: () => { o[k] = ''; dirty(); draw(); if (st.onChange) st.onChange(); } }, 'Limpar') : null,
         file),
       v ? hideOnError(h('img', { src: imgSrc(v), alt: '' })) : null);
@@ -580,7 +587,7 @@ function containerEditor(c, MV) {
           'Aceita **negrito**, menções e títulos: comece a linha com # (grande), ## ou ###.');
       } else if (it.type === 'section') {
         body = h('div', {}, field('Texto', tArea(it, 'content', Object.assign({ rows: 4, max: 2000 }, MV))),
-          field('Imagem pequena ao lado (direita)', imgPicker(it, 'image')),
+          field('Imagem pequena ao lado (direita)', imgPicker(it, 'image', true), 'Use "Enviar redonda" para a imagem aparecer em círculo (o Discord só desenha quadrado; o círculo vem do recorte).'),
           field('Descrição da imagem (opcional)', tInput(it, 'desc', { max: 256 })));
       } else if (it.type === 'gallery') {
         body = h('div', {}, listEditor(it.images, () => ({ src: '', desc: '' }), (g) => h('div', {},
@@ -656,7 +663,7 @@ function tabMessages() {
     h('div', { class: 'row' },
       field('Cor da barra lateral', cInput(e, 'color')),
       field('Imagem grande', imgPicker(e, 'image'), IMG_HINT),
-      field('Miniatura no canto', imgPicker(e, 'thumbnail'))),
+      field('Miniatura no canto', imgPicker(e, 'thumbnail', true))),
     h('div', { class: 'row' },
       field('Autor (nome)', tInput(e, 'authorName', { max: 256 })),
       field('Autor (ícone)', imgPicker(e, 'authorIcon')),
@@ -744,7 +751,171 @@ function tabMessages() {
   return box;
 }
 
-const TAB_FN = { home: tabHome, messages: tabMessages, welcome: () => tabCard('welcome'), leave: () => tabCard('leave'), roles: tabRoles, levels: tabLevels, commands: tabCommands, interaction: tabInteraction, translate: tabTranslate, games: tabGames };
+/* ---------- Wiki de Capos ---------- */
+async function wikiUpload(file, hq) {
+  if (file.size > 8 * 1024 * 1024) throw new Error(file.name + ': imagem muito grande (máx. 8 MB).');
+  const r = await fetch('/api/guilds/' + st.gid + '/wiki/upload' + (hq ? '?hq=1' : ''), { method: 'POST', credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/octet-stream' }, body: await file.arrayBuffer() });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || 'Erro ' + r.status);
+  return j.ref;
+}
+
+function guessCmdName(fileName) {
+  const base = String(fileName || '').replace(/\.[^.]+$/, '').toLowerCase().replace(/[^a-z0-9À-ÿ_-]/g, '');
+  if (!base || /^(screenshot|img|image|imagem|print|whatsapp|photo|foto|pxl|dsc|\d)/.test(base)) return '';
+  return base.slice(0, 32);
+}
+
+function tabWiki() {
+  const w = st.cfg.wiki;
+  const box = h('div');
+  let query = '';
+  let rarFilter = '';
+  let hq = false;
+  const listBox = h('div');
+  const rarOpts = () => w.rarities.map((r) => ({ v: r.name, t: (r.emoji ? r.emoji + ' ' : '') + r.name }));
+
+  const addFiles = async (files, entry) => {
+    const list = Array.from(files || []);
+    for (let i = 0; i < list.length; i++) {
+      try {
+        toast('Enviando ' + (i + 1) + ' de ' + list.length + '…');
+        const ref = await wikiUpload(list[i], hq);
+        if (entry) { if (entry.images.length < 4) entry.images.push(ref); }
+        else w.entries.unshift({ id: '', name: guessCmdName(list[i].name), aliases: [], rarity: w.rarities[0] ? w.rarities[0].name : '', text: '', images: [ref] });
+        dirty();
+        drawList();
+      } catch (e) { toast(e.message, 'err'); }
+    }
+    if (list.length) toast('Imagens enviadas! Confira os nomes e toque em Salvar.', 'ok');
+  };
+
+  const pickFiles = (multiple, cb) => {
+    const f = h('input', { type: 'file', accept: 'image/png,image/jpeg,image/gif,image/webp', style: 'display:none' });
+    if (multiple) f.multiple = true;
+    f.addEventListener('change', () => cb(f.files));
+    f.click();
+  };
+
+  const entryBlock = (e) => {
+    const bad = !e.name;
+    return h('details', { class: 'edet' + (bad ? ' bad' : ''), open: bad },
+      h('summary', {}, (bad ? '⚠️ SEM NOME — ' : '') + (e.name ? '!' + e.name : 'dê um nome') + '  ·  ' + e.rarity + '  ·  ' + e.images.length + ' imagem(ns)'),
+      h('div', { class: 'wth' }, e.images.map((ref, i) => h('div', { class: 'w' },
+        hideOnError(h('img', { src: imgSrc(ref), alt: '', loading: 'lazy' })),
+        h('button', { class: 'btn danger small x', type: 'button', onclick: () => { e.images.splice(i, 1); dirty(); drawList(); } }, '✕')))),
+      e.images.length < 4 ? h('button', { class: 'btn ghost small', type: 'button', onclick: () => pickFiles(true, (fs) => addFiles(fs, e)) }, '📁 Adicionar imagem') : null,
+      h('div', { class: 'row' },
+        field('Nome do comando (sem o !)', tInput(e, 'name', { max: 32 }), 'Ex.: ateu → os membros digitam !ateu'),
+        field('Raridade', sel(e, 'rarity', rarOpts(), { empty: null }))),
+      field('Apelidos (separe por vírgula)', (() => {
+        const i = h('input', { type: 'text', maxlength: 200, placeholder: 'alvise, guarda',
+          oninput: (ev) => { e.aliases = ev.target.value.split(',').map((s) => s.trim()).filter(Boolean); dirty(); } });
+        i.value = e.aliases.join(', ');
+        return i;
+      })()),
+      field('Texto junto com a imagem (opcional)', tArea(e, 'text', { rows: 3, max: 1500, tools: false })),
+      h('button', { class: 'btn danger small', type: 'button', style: 'margin-top:10px', onclick: () => {
+        if (confirm('Remover este personagem da wiki?')) { w.entries.splice(w.entries.indexOf(e), 1); dirty(); drawList(); }
+      } }, 'Remover personagem'));
+  };
+
+  const drawList = () => {
+    const q = query.trim().toLowerCase();
+    const shown = w.entries.filter((e) => (!rarFilter || e.rarity === rarFilter) && (!q || e.name.indexOf(q) >= 0 || e.aliases.some((a) => a.indexOf(q) >= 0)));
+    const counts = w.rarities.map((r) => w.entries.filter((e) => e.rarity === r.name).length + ' ' + r.name).join(' · ');
+    listBox.replaceChildren(
+      h('p', { class: 'sub' }, w.entries.length + ' personagem(ns): ' + counts + (q || rarFilter ? ' · mostrando ' + shown.length : '')),
+      shown.map(entryBlock));
+  };
+
+  const chanBox = h('div');
+  const chanEditor = () => {
+    const draw = () => chanBox.replaceChildren(
+      w.channels.map((c, i) => h('div', { class: 'item' },
+        h('div', { class: 'row' },
+          field('Canal', sel(c, 'channelId', chOpts())),
+          field('Raridades aceitas', multi(c, 'rarities', rarOpts(), { label: 'adicionar raridade' }))),
+        h('button', { class: 'btn danger small', type: 'button', onclick: () => { w.channels.splice(i, 1); dirty(); draw(); } }, 'Remover canal'))),
+      w.channels.length < 20 ? h('button', { class: 'btn ghost', type: 'button', onclick: () => { w.channels.push({ channelId: '', rarities: [] }); dirty(); draw(); } }, '+ Adicionar canal') : null);
+    draw();
+    return chanBox;
+  };
+  const rarEditor = () => {
+    const rb = h('div');
+    const draw = () => rb.replaceChildren(
+      w.rarities.map((r, i) => h('div', { class: 'item' },
+        h('button', { class: 'btn danger small x', type: 'button', onclick: () => {
+          if (w.rarities.length <= 1) return toast('Mantenha pelo menos uma raridade.', 'err');
+          const gone = w.rarities.splice(i, 1)[0];
+          w.channels.forEach((c) => { c.rarities = c.rarities.filter((n) => n !== gone.name); });
+          w.entries.forEach((e) => { if (e.rarity === gone.name) e.rarity = w.rarities[0].name; });
+          dirty(); draw(); drawList();
+        } }, 'Remover'),
+        h('div', { class: 'row' },
+          field('Nome', (() => {
+            const inp = h('input', { type: 'text', maxlength: 30 });
+            inp.value = r.name;
+            inp.addEventListener('change', () => {
+              const nv = inp.value.trim();
+              if (!nv) { inp.value = r.name; return; }
+              w.entries.forEach((e) => { if (e.rarity === r.name) e.rarity = nv; });
+              w.channels.forEach((c) => { c.rarities = c.rarities.map((n) => (n === r.name ? nv : n)); });
+              r.name = nv; dirty(); drawList();
+            });
+            return inp;
+          })()),
+          field('Emoji (opcional)', tInput(r, 'emoji', { max: 64 })))) ),
+      w.rarities.length < 10 ? h('button', { class: 'btn ghost', type: 'button', onclick: () => { w.rarities.push({ name: 'Nova raridade ' + (w.rarities.length + 1), emoji: '' }); dirty(); draw(); } }, '+ Adicionar raridade') : null);
+    draw();
+    return rb;
+  };
+
+  const publishList = async () => {
+    try {
+      await save();
+      await api('/api/guilds/' + st.gid + '/wiki/publish-list', { method: 'POST' });
+      toast('Lista publicada no Discord!', 'ok');
+    } catch (e) { toast(e.message, 'err'); }
+  };
+
+  const search = h('input', { type: 'search', placeholder: '🔎 Buscar personagem…', style: 'margin-bottom:10px',
+    oninput: (ev) => { query = ev.target.value; drawList(); } });
+
+  box.append(
+    card('📖 Wiki de Capos', 'Você digita !nome em um canal da wiki e o bot responde com a imagem. Cadastre os personagens aqui, escolha as imagens da galeria e toque em Salvar.'),
+    card('Personagens', null,
+      h('div', { class: 'dbtns' },
+        h('button', { class: 'btn', type: 'button', onclick: () => pickFiles(true, (fs) => addFiles(fs, null)) }, '📁 Importar imagens (várias de uma vez)'),
+        h('button', { class: 'btn ghost', type: 'button', onclick: () => { w.entries.unshift({ id: '', name: '', aliases: [], rarity: w.rarities[0].name, text: '', images: [] }); dirty(); drawList(); } }, '+ Novo personagem')),
+      chk({ get hq() { return hq; }, set hq(v) { hq = v; } }, 'hq', 'Alta qualidade (maior, para prints com letras bem pequenas)'),
+      h('p', { class: 'sub' }, 'Depois de importar, dê um nome a cada imagem (campo "Nome do comando"). Personagens sem nome são descartados ao salvar.'),
+      search,
+      h('select', { style: 'margin-bottom:10px', onchange: (ev) => { rarFilter = ev.target.value; drawList(); } },
+        h('option', { value: '' }, 'Todas as raridades'),
+        w.rarities.map((r) => h('option', { value: r.name }, r.name))),
+      listBox),
+    card('Onde e quem pode usar', null,
+      field('Canais da wiki e a raridade de cada um', chanEditor(), 'Em cada canal só funcionam os personagens das raridades escolhidas (vazio = todas). Fora desses canais o bot ignora os comandos.'),
+      field('Quem pode usar os comandos', sel(w, 'who', [
+        { v: 'owner', t: 'Só o dono do servidor (você)' },
+        { v: 'roles', t: 'Dono + cargos que eu escolher' },
+        { v: 'everyone', t: 'Todos os membros' }], { empty: null }), 'Quem não tiver permissão é ignorado, sem resposta.'),
+      field('Cargos que podem usar (só vale na opção "Dono + cargos")', multi(w, 'roleIds', roleOpts(), { label: 'adicionar cargo' })),
+      chk(w, 'deleteCommand', 'Apagar a minha mensagem do comando (deixa o canal limpo; o bot precisa da permissão Gerenciar mensagens no canal)'),
+      field('Canal da lista de comandos (opcional)', sel(w, 'listChannelId', chOpts()), 'Onde o bot publica a lista por raridade.')),
+    card('Raridades', 'Servem para separar a lista de comandos em grupos.', rarEditor()),
+    card('Lista de comandos (mensagem)', null,
+      field('Texto de abertura (opcional)', tArea(w, 'intro', { rows: 4, max: 1500, tools: false }), 'Aparece antes da lista. Aceita **negrito** e # título.'),
+      field('Cor da barra', cInput(w, 'color')),
+      h('button', { class: 'btn green', type: 'button', onclick: publishList }, '📤 Salvar e publicar a lista no Discord'),
+      h('p', { class: 'sub' }, 'Ao publicar de novo, o bot apaga a lista antiga e envia a nova.')));
+  drawList();
+  return box;
+}
+
+const TAB_FN = { home: tabHome, messages: tabMessages, wiki: tabWiki, welcome: () => tabCard('welcome'), leave: () => tabCard('leave'), roles: tabRoles, levels: tabLevels, commands: tabCommands, interaction: tabInteraction, translate: tabTranslate, games: tabGames };
 
 /* ---------- salvar / carregar ---------- */
 async function save() {
