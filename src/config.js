@@ -70,6 +70,13 @@ function defaults() {
     },
     panels: [],
     messages: [],
+    autoroles: { memberRoleIds: [], botRoleIds: [] },
+    logs: {
+      enabled: false,
+      channelId: '',
+      ignoreChannelIds: [],
+      events: { messageDelete: true, messageEdit: true, memberJoin: true, memberLeave: true, roleChange: true, nickChange: true, ban: true, channel: true, mod: true },
+    },
     tickets: {
       enabled: false,
       categoryId: '',
@@ -191,6 +198,19 @@ function sanitizeContainer(c) {
     spoiler: bool(c.spoiler, false),
     items,
   };
+}
+
+const LOG_EVENTS = ['messageDelete', 'messageEdit', 'memberJoin', 'memberLeave', 'roleChange', 'nickChange', 'ban', 'channel', 'mod'];
+function sanitizeLogs(l) {
+  l = l && typeof l === 'object' ? l : {};
+  const ev = l.events && typeof l.events === 'object' ? l.events : {};
+  const events = {};
+  for (const k of LOG_EVENTS) events[k] = bool(ev[k], true);
+  return { enabled: bool(l.enabled, false), channelId: sid(l.channelId), ignoreChannelIds: idList(l.ignoreChannelIds, 50), events };
+}
+function sanitizeAutoroles(a) {
+  a = a && typeof a === 'object' ? a : {};
+  return { memberRoleIds: idList(a.memberRoleIds, 10), botRoleIds: idList(a.botRoleIds, 10) };
 }
 
 // Tickets: atendimento privado por canal.
@@ -362,6 +382,8 @@ function sanitize(input, old) {
 
   out.wiki = sanitizeWiki(i.wiki, old);
   out.tickets = sanitizeTickets(i.tickets, old);
+  out.logs = sanitizeLogs(i.logs);
+  out.autoroles = sanitizeAutoroles(i.autoroles);
 
   // Níveis
   const l = i.levels && typeof i.levels === 'object' ? i.levels : {};
