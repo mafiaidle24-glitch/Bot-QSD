@@ -8,6 +8,7 @@ const { ChannelType, PermissionFlagsBits, PermissionsBitField } = require('disco
 
 const cfgs = require('./config');
 const uploads = require('./uploads');
+const wiki = require('./wiki');
 const { renderCard } = require('./card');
 const { LANGS } = require('./translate');
 
@@ -185,14 +186,34 @@ function startWeb(bot) {
   });
 
   // Envio de imagens do celular/computador (corpo = bytes da imagem)
-  app.post('/api/guilds/:id/uploads', requireAuth, guildAccess, express.raw({ type: '*/*', limit: uploads.MAX }), (req, res) => {
+  app.post('/api/guilds/:id/uploads', requireAuth, guildAccess, express.raw({ type: '*/*', limit: uploads.MAX }), async (req, res) => {
     try {
       if (!Buffer.isBuffer(req.body) || !req.body.length) return res.status(400).json({ error: 'Nenhuma imagem recebida (máx. 8 MB).' });
-      res.json({ ref: uploads.save(req.guild.id, req.body) });
+      const buf = req.query.round === '1' ? await uploads.round(req.body) : req.body;
+      res.json({ ref: uploads.save(req.guild.id, buf) });
     } catch (e) {
       res.status(400).json({ error: e.message });
     }
   });
+
+  // Wiki: envio de imagem com compressão automática (uma de cada vez)
+  app.post('/api/guilds/:id/wiki/upload', requireAuth, guildAccess, express.raw({ type: '*/*', limit: uploads.MAX }), async (req, res) => {
+    try {
+      if (!Buffer.isBuffer(req.body) || !req.body.length) return res.status(400).json({ error: 'Nenhuma imagem recebida (máx. 8 MB).' });
+      const buf = await uploads.compress(req.body, { hq: req.query.hq === '1' });
+      res.json({ ref: uploads.save(req.guild.id, buf), bytes: buf.length });
+    } catch (e) {
+      res.status(400).json({ error: e.message });
+    }
+  });
+
+  app.post('/api/guilds/:id/wiki/publish-list', requireAuth, guildAccess, wrap(async (req, res) => {
+    try {
+      res.json({ ok: true, url: await wiki.publishList(req.guild) });
+    } catch (e) {
+      res.status(400).json({ error: e.message });
+    }
+  }));
 
   app.get('/api/guilds/:id/uploads/:file', requireAuth, guildAccess, (req, res) => {
     const p = uploads.pathByName(req.guild.id, String(req.params.file));
