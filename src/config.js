@@ -71,6 +71,23 @@ function defaults() {
     panels: [],
     messages: [],
     autoroles: { memberRoleIds: [], botRoleIds: [] },
+    moderation: {
+      staffRoleIds: [],
+      dmUser: true,
+      autoPunish: { threshold: 3, action: 'timeout', minutes: 60 },
+      automod: {
+        enabled: false,
+        action: 'warn', // 'delete' = só apaga | 'warn' = apaga e dá um aviso
+        notice: true,
+        spam: { enabled: true, max: 5, seconds: 6 },
+        invites: { enabled: true },
+        links: { enabled: false, allowed: ['tenor.com', 'giphy.com', 'youtube.com', 'youtu.be', 'discordapp.com', 'discordapp.net'] },
+        words: { enabled: false, list: [] },
+        exemptRoleIds: [],
+        exemptUserIds: [],
+        ignoredChannelIds: [],
+      },
+    },
     logs: {
       enabled: false,
       channelId: '',
@@ -207,6 +224,40 @@ function sanitizeLogs(l) {
   const events = {};
   for (const k of LOG_EVENTS) events[k] = bool(ev[k], true);
   return { enabled: bool(l.enabled, false), channelId: sid(l.channelId), ignoreChannelIds: idList(l.ignoreChannelIds, 50), events };
+}
+function domains(v, max) {
+  return arr(v, max).map((x) => String(x || '').toLowerCase().trim().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/.*$/, '').slice(0, 80)).filter((x) => /^[a-z0-9.-]+\.[a-z]{2,}$/.test(x));
+}
+function sanitizeModeration(m) {
+  m = m && typeof m === 'object' ? m : {};
+  const ap = m.autoPunish && typeof m.autoPunish === 'object' ? m.autoPunish : {};
+  const a = m.automod && typeof m.automod === 'object' ? m.automod : {};
+  const sp = a.spam && typeof a.spam === 'object' ? a.spam : {};
+  const inv = a.invites && typeof a.invites === 'object' ? a.invites : {};
+  const li = a.links && typeof a.links === 'object' ? a.links : {};
+  const wo = a.words && typeof a.words === 'object' ? a.words : {};
+  const d = defaults().moderation.automod;
+  return {
+    staffRoleIds: idList(m.staffRoleIds, 10),
+    dmUser: bool(m.dmUser, true),
+    autoPunish: {
+      threshold: int(ap.threshold, 1, 20, 3),
+      action: oneOf(ap.action, ['none', 'timeout', 'kick', 'ban'], 'timeout'),
+      minutes: int(ap.minutes, 1, 40320, 60),
+    },
+    automod: {
+      enabled: bool(a.enabled, false),
+      action: oneOf(a.action, ['delete', 'warn'], 'warn'),
+      notice: bool(a.notice, true),
+      spam: { enabled: bool(sp.enabled, true), max: int(sp.max, 3, 20, 5), seconds: int(sp.seconds, 2, 60, 6) },
+      invites: { enabled: bool(inv.enabled, true) },
+      links: { enabled: bool(li.enabled, false), allowed: li.allowed === undefined ? d.links.allowed.slice() : domains(li.allowed, 50) },
+      words: { enabled: bool(wo.enabled, false), list: arr(wo.list, 200).map((x) => String(x || '').toLowerCase().trim().slice(0, 40)).filter(Boolean) },
+      exemptRoleIds: idList(a.exemptRoleIds, 20),
+      exemptUserIds: idList(a.exemptUserIds, 20),
+      ignoredChannelIds: idList(a.ignoredChannelIds, 50),
+    },
+  };
 }
 function sanitizeAutoroles(a) {
   a = a && typeof a === 'object' ? a : {};
@@ -384,6 +435,7 @@ function sanitize(input, old) {
   out.tickets = sanitizeTickets(i.tickets, old);
   out.logs = sanitizeLogs(i.logs);
   out.autoroles = sanitizeAutoroles(i.autoroles);
+  out.moderation = sanitizeModeration(i.moderation);
 
   // Níveis
   const l = i.levels && typeof i.levels === 'object' ? i.levels : {};

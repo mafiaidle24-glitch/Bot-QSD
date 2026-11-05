@@ -273,7 +273,7 @@ function msgPreview(text, imgEl) {
 
 /* ---------- abas ---------- */
 const TABS = [
-  ['home', '🏠 Início'], ['welcome', '👋 Boas-vindas'], ['leave', '🚪 Saída'], ['roles', '🎛️ Cargos / Botões'], ['messages', '📨 Mensagens / Embeds'], ['wiki', '📖 Wiki de Capos'], ['tickets', '🎫 Tickets'], ['autoroles', '🏷️ Autoroles'], ['logs', '📜 Logs'],
+  ['home', '🏠 Início'], ['welcome', '👋 Boas-vindas'], ['leave', '🚪 Saída'], ['roles', '🎛️ Cargos / Botões'], ['messages', '📨 Mensagens / Embeds'], ['wiki', '📖 Wiki de Capos'], ['tickets', '🎫 Tickets'], ['autoroles', '🏷️ Autoroles'], ['moderation', '🔨 Moderação'], ['logs', '📜 Logs'],
   ['levels', '⭐ Rank / Níveis'], ['commands', '⌨️ Comandos'], ['interaction', '💬 Interação'],
   ['translate', '🌐 Tradução'], ['games', '🎮 Mini jogos'],
 ];
@@ -424,6 +424,47 @@ function tabAutoroles() {
     card('🏷️ Cargos automáticos', 'Cargos que o bot entrega sozinho quando alguém entra no servidor, sem precisar clicar em nada.',
       field('Cargo de visitante (quem acabou de entrar)', multi(a, 'memberRoleIds', roleOpts(), { label: 'adicionar cargo…' }), 'Quem entra recebe este cargo na hora. Os cargos automáticos da aba Boas-vindas também continuam valendo.'),
       field('Cargos para bots que entrarem', multi(a, 'botRoleIds', roleOpts(), { label: 'adicionar cargo…' }))));
+}
+
+/** Lista (array) editada como texto, um item por linha. */
+function linesArea(o, k, { rows = 4, ph = '' } = {}) {
+  const ta = h('textarea', { rows, placeholder: ph, oninput: (e) => { o[k] = e.target.value.split('\n').map((x) => x.trim()).filter(Boolean); dirty(); } });
+  ta.value = (o[k] || []).join('\n');
+  return ta;
+}
+
+function tabModeration() {
+  const m = st.cfg.moderation;
+  const a = m.automod;
+  const me = st.me && (st.me.user || st.me);
+  const userOpts = me && me.id ? [{ v: me.id, t: '👤 Minha conta (' + (me.username || 'eu') + ')' }] : [];
+  return h('div', {},
+    card('🔨 Equipe e punições', 'Donos, administradores e os cargos abaixo podem usar os comandos de moderação. Comandos: /avisar, /avisos, /limparavisos, /silenciar, /tirarsilencio, /expulsar, /banir e /desbanir.',
+      field('Cargos da equipe de moderação', multi(m, 'staffRoleIds', roleOpts(), { label: 'adicionar cargo…' }), 'O bot precisa das permissões: Silenciar membros, Expulsar, Banir e Gerenciar mensagens, e o cargo dele acima dos membros.'),
+      chk(m, 'dmUser', 'Avisar o membro por mensagem privada quando for punido'),
+      h('div', { class: 'row' },
+        field('Avisos até a punição automática', nInput(m.autoPunish, 'threshold', 1, 20)),
+        field('Punição automática', sel(m.autoPunish, 'action', [{ v: 'none', t: 'Nenhuma' }, { v: 'timeout', t: '🔇 Silenciar' }, { v: 'kick', t: '👢 Expulsar' }, { v: 'ban', t: '⛔ Banir' }], { empty: null })),
+        field('Minutos de silêncio', nInput(m.autoPunish, 'minutes', 1, 40320)))),
+    card('🛡️ Automod', 'Apaga sozinho mensagens ruins. A equipe, o dono e os isentos nunca são afetados.',
+      chk(a, 'enabled', 'Automod ligado'),
+      h('div', { class: 'row' },
+        field('Quando pegar uma mensagem', sel(a, 'action', [{ v: 'warn', t: 'Apagar e dar um aviso' }, { v: 'delete', t: 'Só apagar' }], { empty: null }))),
+      chk(a, 'notice', 'Mostrar um aviso curto no canal (some em 6 segundos)'),
+      h('div', { class: 'lbl', style: 'margin-top:10px;font-size:12px;font-weight:700;color:#b5bac1' }, 'FILTROS'),
+      chk(a.spam, 'enabled', '💬 Spam (muitas mensagens seguidas)'),
+      h('div', { class: 'row' },
+        field('Mensagens permitidas', nInput(a.spam, 'max', 3, 20)),
+        field('Em quantos segundos', nInput(a.spam, 'seconds', 2, 60))),
+      chk(a.invites, 'enabled', '📨 Convites de outros servidores'),
+      chk(a.links, 'enabled', '🔗 Links (exceto os permitidos abaixo)'),
+      field('Sites permitidos (um por linha)', linesArea(a.links, 'allowed', { rows: 4, ph: 'tenor.com' })),
+      chk(a.words, 'enabled', '🚫 Palavras proibidas'),
+      field('Lista de palavras (uma por linha)', linesArea(a.words, 'list', { rows: 4, ph: 'palavra' }))),
+    card('✅ Isentos', 'Nunca sofrem com o automod.',
+      field('Cargos isentos', multi(a, 'exemptRoleIds', roleOpts(), { label: 'adicionar cargo…' })),
+      field('Contas isentas', multi(a, 'exemptUserIds', userOpts, { label: 'adicionar conta…' }), 'Use para a sua conta de testes.'),
+      field('Canais ignorados', multi(a, 'ignoredChannelIds', chOpts(), { label: 'adicionar canal…' }))));
 }
 
 function tabLogs() {
@@ -1007,7 +1048,7 @@ function tabWiki() {
   return box;
 }
 
-const TAB_FN = { home: tabHome, messages: tabMessages, wiki: tabWiki, tickets: tabTickets, autoroles: tabAutoroles, logs: tabLogs, welcome: () => tabCard('welcome'), leave: () => tabCard('leave'), roles: tabRoles, levels: tabLevels, commands: tabCommands, interaction: tabInteraction, translate: tabTranslate, games: tabGames };
+const TAB_FN = { home: tabHome, messages: tabMessages, wiki: tabWiki, tickets: tabTickets, autoroles: tabAutoroles, moderation: tabModeration, logs: tabLogs, welcome: () => tabCard('welcome'), leave: () => tabCard('leave'), roles: tabRoles, levels: tabLevels, commands: tabCommands, interaction: tabInteraction, translate: tabTranslate, games: tabGames };
 
 /* ---------- salvar / carregar ---------- */
 async function save() {
