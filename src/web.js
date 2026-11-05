@@ -9,6 +9,7 @@ const { ChannelType, PermissionFlagsBits, PermissionsBitField } = require('disco
 const cfgs = require('./config');
 const uploads = require('./uploads');
 const wiki = require('./wiki');
+const tickets = require('./tickets');
 const { renderCard } = require('./card');
 const { LANGS } = require('./translate');
 
@@ -164,6 +165,10 @@ function startWeb(bot) {
       .filter((c) => c.type === ChannelType.GuildText || c.type === ChannelType.GuildAnnouncement)
       .sort((a, b) => a.rawPosition - b.rawPosition)
       .map((c) => ({ id: c.id, name: c.name }));
+    const categories = guild.channels.cache
+      .filter((c) => c.type === ChannelType.GuildCategory)
+      .sort((a, b) => a.rawPosition - b.rawPosition)
+      .map((c) => ({ id: c.id, name: c.name }));
     const roles = guild.roles.cache
       .filter((r) => r.id !== guild.id)
       .sort((a, b) => b.position - a.position)
@@ -175,6 +180,7 @@ function startWeb(bot) {
       guild: { id: guild.id, name: guild.name },
       config: cfgs.getConfig(guild.id),
       channels,
+      categories,
       roles,
       botCanManageRoles: me.permissions.has(PermissionFlagsBits.ManageRoles),
     });
@@ -206,6 +212,14 @@ function startWeb(bot) {
       res.status(400).json({ error: e.message });
     }
   });
+
+  app.post('/api/guilds/:id/tickets/publish', requireAuth, guildAccess, wrap(async (req, res) => {
+    try {
+      res.json({ ok: true, url: await tickets.publishPanel(req.guild) });
+    } catch (e) {
+      res.status(400).json({ error: e.message });
+    }
+  }));
 
   app.post('/api/guilds/:id/wiki/publish-list', requireAuth, guildAccess, wrap(async (req, res) => {
     try {

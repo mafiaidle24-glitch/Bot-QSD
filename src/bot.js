@@ -751,7 +751,7 @@ async function runSlash(i) {
         return i.reply({ content: 'Só administradores podem publicar o painel de tickets.', flags: EPHEMERAL });
       }
       try {
-        await i.channel.send(tickets.buildTicketPanel());
+        await i.channel.send(tickets.buildPanelPayload(cfgs.getConfig(i.guild.id).tickets.panel));
       } catch (e) {
         warn('painel de tickets', e);
         return i.reply({ content: 'Não consegui publicar o painel aqui. O bot precisa ver este canal e poder enviar mensagens e embeds nele.', flags: EPHEMERAL });
@@ -769,7 +769,7 @@ client.on(Events.InteractionCreate, async (i) => {
       if (i.customId.startsWith('rp:')) return await handleRoleButton(i);
       if (i.customId.startsWith('quiz:')) return await handleQuizButton(i);
       if (i.customId.startsWith('ppt:')) return await handlePptButton(i);
-      if (i.customId.startsWith('ticket:')) return await tickets.handleTicketButton(i);
+      if (i.customId.startsWith('tk:')) return await tickets.handleButton(i);
     }
   } catch (e) {
     warn('interação', e);
