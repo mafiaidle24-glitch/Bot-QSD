@@ -273,7 +273,7 @@ function msgPreview(text, imgEl) {
 
 /* ---------- abas ---------- */
 const TABS = [
-  ['home', '🏠 Início'], ['welcome', '👋 Boas-vindas'], ['leave', '🚪 Saída'], ['roles', '🎛️ Cargos / Botões'], ['messages', '📨 Mensagens / Embeds'], ['wiki', '📖 Wiki de Capos'],
+  ['home', '🏠 Início'], ['welcome', '👋 Boas-vindas'], ['leave', '🚪 Saída'], ['roles', '🎛️ Cargos / Botões'], ['messages', '📨 Mensagens / Embeds'], ['wiki', '📖 Wiki de Capos'], ['tickets', '🎫 Tickets'], ['autoroles', '🏷️ Autoroles'], ['logs', '📜 Logs'],
   ['levels', '⭐ Rank / Níveis'], ['commands', '⌨️ Comandos'], ['interaction', '💬 Interação'],
   ['translate', '🌐 Tradução'], ['games', '🎮 Mini jogos'],
 ];
@@ -415,6 +415,98 @@ function tabRoles() {
   };
   draw();
   return box;
+}
+
+function tabAutoroles() {
+  const a = st.cfg.autoroles;
+  return h('div', {},
+    !st.data.botCanManageRoles ? h('div', { class: 'warn' }, '⚠️ O bot precisa da permissão "Gerenciar Cargos" e o cargo dele precisa ficar ACIMA dos cargos que ele vai entregar.') : null,
+    card('🏷️ Cargos automáticos', 'Cargos que o bot entrega sozinho quando alguém entra no servidor, sem precisar clicar em nada.',
+      field('Cargo de visitante (quem acabou de entrar)', multi(a, 'memberRoleIds', roleOpts(), { label: 'adicionar cargo…' }), 'Quem entra recebe este cargo na hora. Os cargos automáticos da aba Boas-vindas também continuam valendo.'),
+      field('Cargos para bots que entrarem', multi(a, 'botRoleIds', roleOpts(), { label: 'adicionar cargo…' }))));
+}
+
+function tabLogs() {
+  const l = st.cfg.logs;
+  const EV = [
+    ['messageDelete', '🗑️ Mensagens apagadas'], ['messageEdit', '✏️ Mensagens editadas'], ['memberJoin', '📥 Entrada de membros'],
+    ['memberLeave', '📤 Saída de membros'], ['roleChange', '🏷️ Mudança de cargos'], ['nickChange', '📝 Mudança de apelido'],
+    ['ban', '⛔ Banimentos'], ['channel', '📁 Canais criados/apagados'], ['mod', '🔨 Ações de moderação'],
+  ];
+  return h('div', {},
+    card('📜 Logs do servidor', 'Registra num canal privado (só a equipe deve ver) tudo o que acontece. Deixe o canal escondido para os membros comuns.',
+      chk(l, 'enabled', 'Logs ligados'),
+      field('Canal dos logs', sel(l, 'channelId', chOpts())),
+      field('Ignorar estes canais (não registrar mensagens deles)', multi(l, 'ignoreChannelIds', chOpts(), { label: 'adicionar canal…' }))),
+    card('O que registrar', '', EV.map(([k, t]) => chk(l.events, k, t))));
+}
+
+function tabTickets() {
+  const t = st.cfg.tickets;
+  const p = t.panel;
+  const STY = [{ v: 1, t: '🔵 Azul' }, { v: 2, t: '⚫ Cinza' }, { v: 3, t: '🟢 Verde' }, { v: 4, t: '🔴 Vermelho' }];
+  const catOpts = (st.data.categories || []).map((c) => ({ v: c.id, t: '📁 ' + c.name }));
+  const prev = h('div');
+  const drawPrev = () => {
+    const e = h('div', { class: 'epv', style: 'border-left:4px solid ' + (p.color || '#5865f2') },
+      p.title ? h('div', { style: 'font-weight:700;margin-bottom:4px' }, p.title) : null,
+      h('div', { style: 'white-space:pre-wrap' }, p.description || ''));
+    prev.replaceChildren(e, h('div', { class: 'dbtns', style: 'margin-top:8px' }, p.types.map((x) =>
+      h('span', { class: 'dbtn s' + x.style }, [x.emoji, x.label].filter(Boolean).join(' ')))));
+  };
+  const typesBox = h('div');
+  const drawTypes = () => {
+    typesBox.replaceChildren(
+      p.types.map((x, i) => h('div', { class: 'item' },
+        h('div', { class: 'row' },
+          field('Texto do botão', tInput(x, 'label', { ph: 'ex.: Suporte', max: 80 })),
+          field('Emoji (opcional)', tInput(x, 'emoji', { ph: '🎫', max: 64 })),
+          field('Cor', sel(x, 'style', STY, { empty: null, num: true }))),
+        field('Mensagem de boas-vindas dentro do ticket', tArea(x, 'welcome', { rows: 3, max: 1500, vars: ['{user}', '{username}', '{server}', '{type}'] })),
+        p.types.length > 1 ? h('button', { class: 'btn danger small', onclick: () => { p.types.splice(i, 1); dirty(); drawTypes(); drawPrev(); } }, 'Remover tipo') : null)),
+      p.types.length < 10 ? h('button', { class: 'btn ghost', onclick: () => {
+        p.types.push({ id: Math.random().toString(36).slice(2, 10), label: 'Novo tipo', emoji: '', style: (p.types.length % 4) + 1, welcome: 'Olá {user}! Explique o motivo do seu contato.' });
+        dirty(); drawTypes(); drawPrev();
+      } }, '+ Adicionar tipo de ticket') : null);
+  };
+  drawTypes(); drawPrev();
+  const onAny = () => drawPrev();
+  const publish = async () => {
+    try {
+      if (!p.channelId) throw new Error('Escolha o canal onde publicar o painel.');
+      await save();
+      await api('/api/guilds/' + st.gid + '/tickets/publish', { method: 'POST' });
+      toast('Painel de tickets publicado no Discord!', 'ok');
+      await reloadData(false);
+    } catch (e) { toast(e.message, 'err'); }
+  };
+  const root = h('div', {},
+    card('🎫 Configurações',  'Tickets são atendimentos privados: cada pedido vira um canal que só o membro e a equipe veem.',
+      chk(t, 'enabled', 'Sistema de tickets ligado'),
+      h('div', { class: 'row' },
+        field('Cargos da equipe (veem e respondem)', multi(t, 'staffRoleIds', roleOpts(), { label: 'adicionar cargo…' })),
+        field('Categoria dos tickets', sel(t, 'categoryId', catOpts, { empty: '🎫 Criar/usar automática' }))),
+      h('div', { class: 'row' },
+        field('Canal de log (abertura, fechamento e transcrição)', sel(t, 'logChannelId', chOpts(), { empty: '— sem log —' })),
+        field('Tickets abertos por pessoa', nInput(t, 'maxPerUser', 1, 5)),
+        field('Nome do canal', sel(t, 'naming', [{ v: 'type-user', t: 'tipo-usuario (ex.: suporte-joao)' }, { v: 'number', t: 'ticket-0001' }], { empty: null }))),
+      chk(t, 'pingStaff', 'Mencionar a equipe quando abrir um ticket'),
+      chk(t, 'transcript', 'Enviar transcrição (.txt) no canal de log ao fechar'),
+      chk(t, 'userCanClose', 'Dono do ticket pode fechar')),
+    card('📋 Painel', 'A mensagem com os botões que os membros clicam.',
+      h('div', { class: 'row' },
+        field('Canal onde publicar', sel(p, 'channelId', chOpts())),
+        field('Cor', cInput(p, 'color'))),
+      field('Título', tInput(p, 'title', { max: 256 })),
+      field('Texto', tArea(p, 'description', { rows: 4, max: 4000, vars: [] })),
+      h('div', { class: 'lbl', style: 'margin-top:10px;font-size:12px;font-weight:700;color:#b5bac1' }, 'TIPOS DE TICKET (um botão cada)'),
+      typesBox,
+      h('div', { class: 'lbl', style: 'margin-top:12px;font-size:12px;font-weight:700;color:#b5bac1' }, 'PRÉVIA'),
+      prev,
+      h('div', { class: 'dbtns', style: 'margin-top:14px' },
+        h('button', { class: 'btn green', onclick: publish }, p.messageId ? '🔄 Atualizar painel no Discord' : '📤 Publicar painel no Discord'))));
+  root.addEventListener('input', onAny); root.addEventListener('change', onAny);
+  return root;
 }
 
 function tabLevels() {
@@ -915,7 +1007,7 @@ function tabWiki() {
   return box;
 }
 
-const TAB_FN = { home: tabHome, messages: tabMessages, wiki: tabWiki, welcome: () => tabCard('welcome'), leave: () => tabCard('leave'), roles: tabRoles, levels: tabLevels, commands: tabCommands, interaction: tabInteraction, translate: tabTranslate, games: tabGames };
+const TAB_FN = { home: tabHome, messages: tabMessages, wiki: tabWiki, tickets: tabTickets, autoroles: tabAutoroles, logs: tabLogs, welcome: () => tabCard('welcome'), leave: () => tabCard('leave'), roles: tabRoles, levels: tabLevels, commands: tabCommands, interaction: tabInteraction, translate: tabTranslate, games: tabGames };
 
 /* ---------- salvar / carregar ---------- */
 async function save() {
