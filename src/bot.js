@@ -11,7 +11,7 @@ const wiki = require('./wiki');
 const cfgs = require('./config');
 const db = require('./db');
 const { renderCard, renderRank } = require('./card');
-const { translate, LANGS, FLAGS, baseLang } = require('./translate');
+const { translate, LANGS, FLAGS, baseLang, flagLang, langName } = require('./translate');
 const { JOKES, FACTS, QUIZ, EIGHT_BALL } = require('./content');
 
 const EPHEMERAL = MessageFlags.Ephemeral;
@@ -414,7 +414,7 @@ async function handleTranslate(msg, cfg) {
 client.on(Events.MessageReactionAdd, async (reaction, user) => {
   try {
     if (user.bot) return;
-    const lang = FLAGS[reaction.emoji.name];
+    const lang = flagLang(reaction.emoji.name);
     if (!lang) return;
     if (reaction.partial) await reaction.fetch();
     const msg = reaction.message.partial ? await reaction.message.fetch() : reaction.message;
@@ -422,11 +422,23 @@ client.on(Events.MessageReactionAdd, async (reaction, user) => {
     const t = cfgs.getConfig(msg.guild.id).translate;
     if (!t.enabled || !t.flagReactions) return;
     const text = msg.cleanContent?.trim();
-    if (!text || onCooldown('flag:' + msg.id + ':' + lang, 60000)) return;
-    const r = await translate(text, lang);
-    if (!r.text || baseLang(r.from) === baseLang(lang)) return;
+    if (!text || onCooldown('flag:' + msg.id + ':' + lang, 8000)) return;
+    // Aviso curto que some sozinho (para a pessoa saber que o bot viu a bandeira).
+    const note = async (content) => {
+      const m = await msg.reply({ content, allowedMentions: { parse: [], repliedUser: false } }).catch(() => null);
+      if (m) setTimeout(() => m.delete().catch(() => {}), 7000);
+    };
+    let r;
+    try {
+      r = await translate(text, lang);
+    } catch (e) {
+      warn('tradução por bandeira', e);
+      return note('😕 Não consegui traduzir agora. Tente de novo em instantes.');
+    }
+    if (!r.text) return note('😕 Não consegui traduzir essa mensagem.');
+    if (r.text.trim() === text) return note('ℹ️ Essa mensagem já está em **' + langName(lang) + '** (ou não há o que traduzir).');
     await msg.reply({
-      content: ('🌐 **' + (r.from || '?') + ' → ' + lang + '** (pedido de ' + dn(null, user) + ')\n' + r.text).slice(0, 1900),
+      content: ('🌐 **' + langName(r.from) + ' → ' + langName(lang) + '** (pedido de ' + dn(null, user) + ')\n' + r.text).slice(0, 1900),
       allowedMentions: { parse: [], repliedUser: false },
     });
   } catch (e) {
