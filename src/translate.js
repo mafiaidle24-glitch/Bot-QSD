@@ -139,8 +139,32 @@ function langName(code) {
 
 const baseLang = (c) => String(c || '').toLowerCase().split('-')[0];
 
-async function translate(text, target) {
-  text = String(text).slice(0, 1500);
+const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
+
+// Cache: se a mesma frase já foi traduzida para o mesmo idioma, não chama a API de novo.
+// Isso reduz muito os erros 429 (limite de requisições) quando alguém reage com bandeira
+// numa mensagem que a tradução automática já traduziu.
+const CACHE = new Map();
+const CACHE_TTL = 60 * 60 * 1000; // 1 hora
+const CACHE_MAX = 500;
+
+function cacheGet(key) {
+  const hit = CACHE.get(key);
+  if (!hit) return null;
+  if (Date.now() - hit.t > CACHE_TTL) { CACHE.delete(key); return null; }
+  return hit.v;
+}
+
+function cacheSet(key, value) {
+  if (CACHE.size >= CACHE_MAX) CACHE.delete(CACHE.keys().next().value);
+  CACHE.set(key, { t: Date.now(), v: value });
+}
+
+const HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36',
+};
+
+async function translateRaw(text, target) {
   if (process.env.LIBRETRANSLATE_URL) {
     const r = await fetch(process.env.LIBRETRANSLATE_URL.replace(/\/$/, '') + '/translate', {
       method: 'POST',
@@ -158,15 +182,73 @@ async function translate(text, target) {
     const j = await r.json();
     return { text: j.translatedText, from: j.detectedLanguage?.language || '' };
   }
-  const u =
-    'https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&dt=t&tl=' +
-    encodeURIComponent(target) +
-    '&q=' +
-    encodeURIComponent(text);
-  const r = await fetch(u, { signal: AbortSignal.timeout(10000) });
-  if (!r.ok) throw new Error('Tradutor respondeu ' + r.status);
-  const j = await r.json();
-  return { text: (j[0] || []).map((x) => x[0]).join(''), from: j[2] || '' };
+
+  const q = encodeURIComponent(text);
+  const tl = encodeURIComponent(target);
+  let lastErr;
+
+  for (let attempt = 0; attempt < 3; attempt++) {
+    // 1) endpoint principal do Google
+    try {
+      const r = await fetch(
+        'https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&dt=t&tl=' + tl + '&q=' + q,
+        { headers: HEADERS, signal: AbortSignal.timeout(10000) }
+      );
+      if (!r.ok) throw new Error('Tradutor respondeu ' + r.status);
+      const j = await r.json();
+      const out = (j[0] || []).map((x) => x[0]).join('');
+      if (out) return { text: out, from: j[2] || '' };
+    } catch (e) {
+      lastErr = e;
+    }
+
+    // 2) endpoint reserva do Google
+    try {
+      const r = await fetch(
+        'https://clients5.google.com/translate_a/t?client=dict-chrome-ex&sl=auto&tl=' + tl + '&q=' + q,
+        { headers: HEADERS, signal: AbortSignal.timeout(10000) }
+      );
+      if (!r.ok) throw new Error('Reserva respondeu ' + r.status);
+      const j = await r.json();
+      const out = (j.sentences || []).map((s) => s.trans || '').join('');
+      if (out) return { text: out, from: j.src || '' };
+    } catch (e) {
+      lastErr = e;
+    }
+
+    // 3) MyMemory (serviço diferente do Google; aceita textos de até 500 caracteres)
+    if (text.length <= 450) {
+      try {
+        const t = target === 'iw' ? 'he' : target;
+        const r = await fetch(
+          'https://api.mymemory.translated.net/get?q=' + q + '&langpair=' + encodeURIComponent('Autodetect|' + t),
+          { headers: HEADERS, signal: AbortSignal.timeout(10000) }
+        );
+        if (!r.ok) throw new Error('MyMemory respondeu ' + r.status);
+        const j = await r.json();
+        const out = j?.responseData?.translatedText;
+        if (out && j.responseStatus == 200) {
+          return { text: out, from: String(j.responseData.detectedLanguage || '').split('-')[0] };
+        }
+      } catch (e) {
+        lastErr = e;
+      }
+    }
+
+    // espera um pouco mais a cada tentativa (1,5 s, depois 3 s)
+    if (attempt < 2) await sleep(1500 * (attempt + 1));
+  }
+  throw lastErr || new Error('Falha ao traduzir');
+}
+
+async function translate(text, target) {
+  text = String(text).slice(0, 1500);
+  const key = target + '\n' + text;
+  const cached = cacheGet(key);
+  if (cached) return cached;
+  const result = await translateRaw(text, target);
+  if (result && result.text) cacheSet(key, result);
+  return result;
 }
 
 module.exports = { translate, LANGS, FLAGS, baseLang, flagLang, langName };
