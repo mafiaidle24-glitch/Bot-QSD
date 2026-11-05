@@ -13,6 +13,7 @@ const { renderCard, renderRank } = require('./card');
 const { translate, LANGS, FLAGS, baseLang, flagLang, langName } = require('./translate');
 const { JOKES, FACTS, QUIZ, EIGHT_BALL } = require('./content');
 const tickets = require('./tickets');
+const logs = require('./logs');
 
 const EPHEMERAL = MessageFlags.Ephemeral;
 const BASE_URL = (process.env.BASE_URL || 'http://localhost:3000').replace(/\/$/, '');
@@ -24,6 +25,7 @@ const client = new Client({
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildMessageReactions,
+    GatewayIntentBits.GuildModeration,
   ],
   partials: [Partials.Message, Partials.Channel, Partials.Reaction, Partials.GuildMember, Partials.User],
 });
@@ -147,9 +149,11 @@ async function sendCard(kind, guild, who) {
 
 client.on(Events.GuildMemberAdd, async (member) => {
   try {
-    const cfg = cfgs.getConfig(member.guild.id).welcome;
-    if (cfg.autoRoleIds.length) {
-      const ids = cfg.autoRoleIds.filter((id) => member.guild.roles.cache.has(id));
+    const all = cfgs.getConfig(member.guild.id);
+    const cfg = all.welcome;
+    const autoIds = member.user.bot ? all.autoroles.botRoleIds : [...new Set([...all.autoroles.memberRoleIds, ...cfg.autoRoleIds])];
+    if (autoIds.length) {
+      const ids = autoIds.filter((id) => member.guild.roles.cache.has(id));
       if (ids.length) await member.roles.add(ids, 'Cargo automático de boas-vindas').catch((e) => warn('cargo automático', e));
     }
     if (cfg.enabled) await sendCard('welcome', member.guild, member).catch((e) => warn('boas-vindas', e));
@@ -751,7 +755,7 @@ async function runSlash(i) {
         return i.reply({ content: 'Só administradores podem publicar o painel de tickets.', flags: EPHEMERAL });
       }
       try {
-        await i.channel.send(tickets.buildTicketPanel());
+        await i.channel.send(tickets.buildPanelPayload(cfgs.getConfig(i.guild.id).tickets.panel));
       } catch (e) {
         warn('painel de tickets', e);
         return i.reply({ content: 'Não consegui publicar o painel aqui. O bot precisa ver este canal e poder enviar mensagens e embeds nele.', flags: EPHEMERAL });
@@ -769,7 +773,7 @@ client.on(Events.InteractionCreate, async (i) => {
       if (i.customId.startsWith('rp:')) return await handleRoleButton(i);
       if (i.customId.startsWith('quiz:')) return await handleQuizButton(i);
       if (i.customId.startsWith('ppt:')) return await handlePptButton(i);
-      if (i.customId.startsWith('ticket:')) return await tickets.handleTicketButton(i);
+      if (i.customId.startsWith('tk:')) return await tickets.handleButton(i);
     }
   } catch (e) {
     warn('interação', e);
@@ -803,6 +807,7 @@ client.once(Events.ClientReady, async () => {
   // ====================================
 });
 
+logs.attach(client);
 client.on(Events.GuildCreate, (g) => registerCommands(g));
 client.on(Events.Error, (e) => warn('client', e));
 

@@ -70,6 +70,33 @@ function defaults() {
     },
     panels: [],
     messages: [],
+    autoroles: { memberRoleIds: [], botRoleIds: [] },
+    logs: {
+      enabled: false,
+      channelId: '',
+      ignoreChannelIds: [],
+      events: { messageDelete: true, messageEdit: true, memberJoin: true, memberLeave: true, roleChange: true, nickChange: true, ban: true, channel: true, mod: true },
+    },
+    tickets: {
+      enabled: false,
+      categoryId: '',
+      staffRoleIds: [],
+      logChannelId: '',
+      maxPerUser: 1,
+      pingStaff: true,
+      transcript: true,
+      userCanClose: true,
+      naming: 'type-user', // 'type-user' | 'number'
+      counter: 0,
+      panel: {
+        channelId: '',
+        messageId: '',
+        title: 'Central de Atendimento',
+        description: 'Precisa de ajuda?\nClique em um botão abaixo para abrir um **ticket** privado com a equipe.',
+        color: '#5865f2',
+        types: [{ id: 'suporte', label: 'Suporte', emoji: '🎫', style: 1, welcome: 'Olá {user}! Explique o motivo do seu contato. A equipe vai te responder em breve.' }],
+      },
+    },
     wiki: {
       channels: [], // [{ channelId, rarities: [] }]  (rarities vazio = todas)
       who: 'owner', // 'owner' | 'roles' | 'everyone'
@@ -170,6 +197,61 @@ function sanitizeContainer(c) {
     color: typeof c.color === 'string' && HEX.test(c.color) ? c.color : '',
     spoiler: bool(c.spoiler, false),
     items,
+  };
+}
+
+const LOG_EVENTS = ['messageDelete', 'messageEdit', 'memberJoin', 'memberLeave', 'roleChange', 'nickChange', 'ban', 'channel', 'mod'];
+function sanitizeLogs(l) {
+  l = l && typeof l === 'object' ? l : {};
+  const ev = l.events && typeof l.events === 'object' ? l.events : {};
+  const events = {};
+  for (const k of LOG_EVENTS) events[k] = bool(ev[k], true);
+  return { enabled: bool(l.enabled, false), channelId: sid(l.channelId), ignoreChannelIds: idList(l.ignoreChannelIds, 50), events };
+}
+function sanitizeAutoroles(a) {
+  a = a && typeof a === 'object' ? a : {};
+  return { memberRoleIds: idList(a.memberRoleIds, 10), botRoleIds: idList(a.botRoleIds, 10) };
+}
+
+// Tickets: atendimento privado por canal.
+function sanitizeTickets(t, old) {
+  t = t && typeof t === 'object' ? t : {};
+  const d = defaults().tickets;
+  const p = t.panel && typeof t.panel === 'object' ? t.panel : {};
+  const usedIds = new Set();
+  let types = arr(p.types, 10).map((x) => {
+    x = x && typeof x === 'object' ? x : {};
+    let id = typeof x.id === 'string' && /^[a-z0-9]{3,12}$/.test(x.id) ? x.id : newId();
+    while (usedIds.has(id)) id = newId();
+    usedIds.add(id);
+    return {
+      id,
+      label: str(x.label, 80, 'Ticket').trim() || 'Ticket',
+      emoji: str(x.emoji, 64).trim(),
+      style: int(x.style, 1, 4, 1),
+      welcome: str(x.welcome, 1500, d.panel.types[0].welcome),
+    };
+  });
+  if (!types.length) types = d.panel.types.map((x) => ({ ...x }));
+  return {
+    enabled: bool(t.enabled, false),
+    categoryId: sid(t.categoryId),
+    staffRoleIds: idList(t.staffRoleIds, 10),
+    logChannelId: sid(t.logChannelId),
+    maxPerUser: int(t.maxPerUser, 1, 5, 1),
+    pingStaff: bool(t.pingStaff, true),
+    transcript: bool(t.transcript, true),
+    userCanClose: bool(t.userCanClose, true),
+    naming: oneOf(t.naming, ['type-user', 'number'], 'type-user'),
+    counter: int(old?.tickets?.counter, 0, 100000000, 0),
+    panel: {
+      channelId: sid(p.channelId),
+      messageId: typeof old?.tickets?.panel?.messageId === 'string' ? old.tickets.panel.messageId : '',
+      title: str(p.title, 256, d.panel.title),
+      description: str(p.description, 4000, d.panel.description),
+      color: col(p.color, d.panel.color),
+      types,
+    },
   };
 }
 
@@ -299,6 +381,9 @@ function sanitize(input, old) {
   });
 
   out.wiki = sanitizeWiki(i.wiki, old);
+  out.tickets = sanitizeTickets(i.tickets, old);
+  out.logs = sanitizeLogs(i.logs);
+  out.autoroles = sanitizeAutoroles(i.autoroles);
 
   // Níveis
   const l = i.levels && typeof i.levels === 'object' ? i.levels : {};
@@ -422,6 +507,22 @@ function setMessageRef(guildId, id, messageId) {
   db.save();
 }
 
+function setTicketPanelMessage(guildId, messageId) {
+  const cfg = getConfig(guildId);
+  cfg.tickets.panel.messageId = String(messageId || '');
+  db.data.guilds[guildId] = cfg;
+  db.save();
+}
+
+/** Próximo número de ticket do servidor (1, 2, 3...). */
+function nextTicketNumber(guildId) {
+  const cfg = getConfig(guildId);
+  cfg.tickets.counter += 1;
+  db.data.guilds[guildId] = cfg;
+  db.save();
+  return cfg.tickets.counter;
+}
+
 function setWikiListIds(guildId, ids) {
   const cfg = getConfig(guildId);
   cfg.wiki.listMessageIds = idList(ids, 20);
@@ -438,4 +539,4 @@ function setPanelMessage(guildId, panelId, messageId) {
   db.save();
 }
 
-module.exports = { defaults, getConfig, setConfig, validate, setPanelMessage, setMessageRef, setWikiListIds, newId };
+module.exports = { defaults, getConfig, setConfig, validate, setPanelMessage, setMessageRef, setWikiListIds, setTicketPanelMessage, nextTicketNumber, newId };
