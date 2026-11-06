@@ -28,8 +28,8 @@ const fightCd = new Map();
 const xpNeeded = (lvl) => 60 + 60 * lvl;
 const weaponOf = (p) => WEAPONS.find((w) => w.id === p.weapon) || WEAPONS[0];
 const armorOf = (p) => ARMORS.find((x) => x.id === p.armor) || ARMORS[0];
-const maxHp = (p) => 100 + 12 * (p.lvl - 1);
-const atkOf = (p) => 6 + 2 * p.lvl + weaponOf(p).atk;
+const maxHp = (p) => 110 + 12 * (p.lvl - 1);
+const atkOf = (p) => 7 + 2 * p.lvl + weaponOf(p).atk;
 const defOf = (p) => armorOf(p).def;
 const reduction = (def) => 100 / (100 + def * 8);
 const titleOf = (lvl) => { let t = TITLES[0][1]; for (const [min, name] of TITLES) if (lvl >= min) t = name; return t; };
@@ -39,11 +39,12 @@ function player(guildId, userId) {
   const g = (db.data.rpg[guildId] ??= {});
   const p = (g[userId] ??= { ...START, biz: [], tick: Date.now() });
   if (!Array.isArray(p.biz)) { p.biz = []; p.collectAt = 0; }
+  if (!p.ver) { p.ver = 2; if (p.wins + p.losses > 0) { p.cash += 300; p.kits += 1; } } // bônus único para quem já jogava antes do ajuste
   ensureDaily(p);
-  // regeneração passiva: 2% da vida máxima por minuto
+  // regeneração passiva: 3% da vida máxima por minuto
   const now = Date.now();
   const mins = (now - (p.tick || now)) / 60000;
-  if (mins >= 0.5 && p.hp < maxHp(p)) p.hp = Math.min(maxHp(p), p.hp + Math.floor(mins * 0.02 * maxHp(p)));
+  if (mins >= 0.5 && p.hp < maxHp(p)) p.hp = Math.min(maxHp(p), p.hp + Math.floor(mins * 0.03 * maxHp(p)));
   p.tick = now;
   if (p.hp > maxHp(p)) p.hp = maxHp(p);
   return p;
@@ -56,7 +57,7 @@ const bar = (cur, max, n = 10) => {
 
 function pickEnemy(lvl) {
   const eligible = ENEMIES.filter((e) => e.minLvl <= lvl);
-  const pool = Math.random() < 0.25 ? eligible : eligible.slice(-3);
+  const pool = Math.random() < 0.4 ? eligible : eligible.slice(-3);
   const e = pick(pool);
   return { name: e.name, emoji: e.emoji, hp: e.hp, atk: e.atk, cash: e.cash, xp: e.xp, boss: e.id === 'chefao' };
 }
@@ -169,14 +170,14 @@ function buyBiz(p, id) {
 /* ---------- missões diárias ---------- */
 const dayKey = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' });
 const MISSION_TYPES = [
-  { type: 'win', label: (g) => 'Vença **' + g + '** lutas', goal: (l) => 3 + Math.floor(l / 5), icon: '⚔️' },
-  { type: 'cash', label: (g) => 'Ganhe **' + money(g) + '** em lutas', goal: (l) => 100 + 45 * l, icon: '💵' },
-  { type: 'xp', label: (g) => 'Ganhe **' + g + ' XP** em lutas', goal: (l) => 50 + 30 * l, icon: '⭐' },
+  { type: 'win', label: (g) => 'Vença **' + g + '** lutas', goal: (l) => 2 + Math.floor(l / 6), icon: '⚔️' },
+  { type: 'cash', label: (g) => 'Ganhe **' + money(g) + '** em lutas', goal: (l) => 60 + 30 * l, icon: '💵' },
+  { type: 'xp', label: (g) => 'Ganhe **' + g + ' XP** em lutas', goal: (l) => 30 + 20 * l, icon: '⭐' },
   { type: 'heal', label: () => 'Use **1** kit médico', goal: () => 1, icon: '💊' },
   { type: 'collect', label: () => 'Colete a renda dos negócios **1** vez', goal: () => 1, icon: '💰' },
 ];
-const missionReward = (lvl) => 60 + 20 * lvl;
-const bonusReward = (lvl) => 100 + 30 * lvl;
+const missionReward = (lvl) => 120 + 40 * lvl;
+const bonusReward = (lvl) => 250 + 60 * lvl;
 
 function ensureDaily(p) {
   const day = dayKey();
@@ -231,12 +232,12 @@ function claim(p) {
 function fight(p, uid) {
   const left = (fightCd.get(uid) || 0) - Date.now();
   if (left > 0) return { text: '⏳ Respire um pouco: espere **' + Math.ceil(left / 1000) + 's** para a próxima luta.' };
-  if (p.hp < Math.ceil(maxHp(p) * 0.2)) return { text: '🩸 Você está ferido demais para lutar. Use um 💊 kit ou espere sua vida voltar.' };
+  if (p.hp < Math.ceil(maxHp(p) * 0.35)) return { text: '🩸 Você está ferido demais para lutar. Use um 💊 kit ou espere sua vida voltar.' };
   fightCd.set(uid, Date.now() + 12000);
   const e = pickEnemy(p.lvl);
   const hpBefore = p.hp;
   const r = simulate(p, e);
-  p.hp = r.won ? r.ph : Math.max(1, Math.round(maxHp(p) * 0.15));
+  p.hp = r.won ? r.ph : Math.max(1, Math.round(maxHp(p) * 0.25));
   const rounds = r.log.length;
   const sum = '⚔️ ' + rounds + ' rodada(s) • ❤️ você: ' + hpBefore + ' → ' + (r.won ? r.ph : 0) + ' • ' + e.emoji + ' rival: ' + bar(r.won ? 0 : r.eh, e.hp, 8);
   let text;
@@ -253,7 +254,7 @@ function fight(p, uid) {
       text += '\n🎉 **Subiu para o nível ' + p.lvl + '!** Vida restaurada.';
     }
   } else {
-    const lost = Math.floor(p.cash * 0.1);
+    const lost = Math.floor(p.cash * 0.05);
     p.cash -= lost; p.losses++;
     text = e.emoji + ' **' + e.name + '** foi mais forte.\n' + sum + '\n💀 **Derrota!** Perdeu ' + money(lost) + '. Dica: compre arma/proteção na 🛒 Loja ou use um kit antes de lutar.';
   }
