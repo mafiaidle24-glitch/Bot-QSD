@@ -161,6 +161,13 @@ function startWeb(bot) {
     const guild = req.guild;
     await guild.channels.fetch().catch(() => {});
     await guild.roles.fetch().catch(() => {});
+    // Lista de membros (para escolher contas isentas etc.). Limitada para não pesar na memória.
+    await guild.members.fetch({ limit: 1000 }).catch(() => {});
+    const members = guild.members.cache
+      .filter((m) => !m.user.bot)
+      .map((m) => ({ id: m.id, name: m.displayName || m.user.username }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .slice(0, 500);
     const me = guild.members.me;
     const channels = guild.channels.cache
       .filter((c) => c.type === ChannelType.GuildText || c.type === ChannelType.GuildAnnouncement)
@@ -182,6 +189,7 @@ function startWeb(bot) {
       config: cfgs.getConfig(guild.id),
       channels,
       categories,
+      members,
       roles,
       botCanManageRoles: me.permissions.has(PermissionFlagsBits.ManageRoles),
     });
