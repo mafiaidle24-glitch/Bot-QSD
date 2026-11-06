@@ -16,6 +16,7 @@ const tickets = require('./tickets');
 const logs = require('./logs');
 const moderation = require('./moderation');
 const minigames = require('./minigames');
+const rpg = require('./rpg');
 
 const EPHEMERAL = MessageFlags.Ephemeral;
 const BASE_URL = (process.env.BASE_URL || 'http://localhost:3000').replace(/\/$/, '');
@@ -679,6 +680,7 @@ const slashCommands = [
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
   ...moderation.commands,
   ...minigames.commands,
+  ...rpg.commands,
 ].map((c) => c.setDMPermission(false).toJSON());
 
 async function registerCommands(guild) {
@@ -694,6 +696,7 @@ async function runSlash(i) {
   const cfg = cfgs.getConfig(i.guild.id);
   if (await moderation.handleSlash(i, cfg)) return;
   if (await minigames.handleSlash(i, { gameAllowed, reward })) return;
+  if (await rpg.handleSlash(i, { gameAllowed })) return;
   switch (i.commandName) {
     case 'rank': {
       if (!cfg.levels.enabled) return i.reply({ content: 'O sistema de níveis está desativado.', flags: EPHEMERAL });
@@ -808,6 +811,7 @@ client.on(Events.InteractionCreate, async (i) => {
       if (i.customId.startsWith('quiz:')) return await handleQuizButton(i);
       if (i.customId.startsWith('ppt:')) return await handlePptButton(i);
       if (i.customId.startsWith('tk:')) return await tickets.handleButton(i);
+      if (i.customId.startsWith('rpg:')) return await rpg.handleButton(i);
     }
   } catch (e) {
     warn('interação', e);
