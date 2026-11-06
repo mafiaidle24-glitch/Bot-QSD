@@ -623,7 +623,7 @@ function tabTranslate() {
 function tabGames() {
   const g = st.cfg.games;
   return h('div', {},
-    card('Mini jogos', 'Comandos: /quiz • /ppt • /adivinhar • /dado • /moeda • /bola8 • /piada • /fato • /abracar',
+    card('Mini jogos', 'Comandos: /quiz • /ppt • /adivinhar • /ship • /rali • /dado • /moeda • /bola8 • /piada • /fato • /abracar',
       chk(g, 'enabled', 'Ativar mini jogos'),
       h('div', { class: 'row' },
         field('Restringir a um canal (opcional)', sel(g, 'channelId', chOpts(), { empty: 'Qualquer canal' })),
