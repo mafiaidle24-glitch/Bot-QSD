@@ -437,7 +437,8 @@ function tabModeration() {
   const m = st.cfg.moderation;
   const a = m.automod;
   const me = st.me && (st.me.user || st.me);
-  const userOpts = me && me.id ? [{ v: me.id, t: '👤 Minha conta (' + (me.username || 'eu') + ')' }] : [];
+  const userOpts = (st.data.members || []).map((u) => ({ v: u.id, t: '👤 ' + u.name + (me && me.id === u.id ? ' (você)' : '') }));
+  if (me && me.id && !userOpts.some((x) => x.v === me.id)) userOpts.unshift({ v: me.id, t: '👤 Minha conta (' + (me.username || 'eu') + ')' });
   return h('div', {},
     card('🔨 Equipe e punições', 'Donos, administradores e os cargos abaixo podem usar os comandos de moderação. Comandos: /avisar, /avisos, /limparavisos, /silenciar, /tirarsilencio, /expulsar, /banir e /desbanir.',
       field('Cargos da equipe de moderação', multi(m, 'staffRoleIds', roleOpts(), { label: 'adicionar cargo…' }), 'O bot precisa das permissões: Silenciar membros, Expulsar, Banir e Gerenciar mensagens, e o cargo dele acima dos membros.'),
