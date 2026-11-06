@@ -39,6 +39,7 @@ function player(guildId, userId) {
   const g = (db.data.rpg[guildId] ??= {});
   const p = (g[userId] ??= { ...START, biz: [], tick: Date.now() });
   if (!Array.isArray(p.biz)) { p.biz = []; p.collectAt = 0; }
+  ensureDaily(p);
   // regeneração passiva: 2% da vida máxima por minuto
   const now = Date.now();
   const mins = (now - (p.tick || now)) / 60000;
@@ -94,13 +95,16 @@ function profileEmbed(p, user, extra) {
   return e;
 }
 
-function menuRow(uid) {
-  return new ActionRowBuilder().addComponents(
+function menuRows(uid) {
+  const row1 = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId('rpg:fight:' + uid).setLabel('Lutar').setEmoji('⚔️').setStyle(ButtonStyle.Danger),
     new ButtonBuilder().setCustomId('rpg:kit:' + uid).setLabel('Usar kit').setEmoji('💊').setStyle(ButtonStyle.Success),
     new ButtonBuilder().setCustomId('rpg:shop:' + uid).setLabel('Loja').setEmoji('🛒').setStyle(ButtonStyle.Primary),
     new ButtonBuilder().setCustomId('rpg:biz:' + uid).setLabel('Negócios').setEmoji('🏢').setStyle(ButtonStyle.Primary),
     new ButtonBuilder().setCustomId('rpg:menu:' + uid).setLabel('Perfil').setEmoji('🪪').setStyle(ButtonStyle.Secondary));
+  const row2 = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId('rpg:missions:' + uid).setLabel('Missões do dia').setEmoji('📋').setStyle(ButtonStyle.Success));
+  return [row1, row2];
 }
 
 function shopView(p, uid, note) {
@@ -128,6 +132,7 @@ function pending(p) {
 }
 function collect(p) {
   const n = pending(p);
+  if (n > 0) progress(p, 'collect', 1);
   p.cash += n;
   p.collectAt = Date.now();
   db.save();
@@ -161,6 +166,67 @@ function buyBiz(p, id) {
   return '🏢 Você comprou **' + b.emoji + ' ' + b.name + '**!' + (got ? ' (+' + money(got) + ' coletados)' : '');
 }
 
+/* ---------- missões diárias ---------- */
+const dayKey = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' });
+const MISSION_TYPES = [
+  { type: 'win', label: (g) => 'Vença **' + g + '** lutas', goal: (l) => 3 + Math.floor(l / 5), icon: '⚔️' },
+  { type: 'cash', label: (g) => 'Ganhe **' + money(g) + '** em lutas', goal: (l) => 100 + 45 * l, icon: '💵' },
+  { type: 'xp', label: (g) => 'Ganhe **' + g + ' XP** em lutas', goal: (l) => 50 + 30 * l, icon: '⭐' },
+  { type: 'heal', label: () => 'Use **1** kit médico', goal: () => 1, icon: '💊' },
+  { type: 'collect', label: () => 'Colete a renda dos negócios **1** vez', goal: () => 1, icon: '💰' },
+];
+const missionReward = (lvl) => 60 + 20 * lvl;
+const bonusReward = (lvl) => 100 + 30 * lvl;
+
+function ensureDaily(p) {
+  const day = dayKey();
+  if (p.daily && p.daily.day === day) return;
+  const pool = MISSION_TYPES.filter((m) => m.type !== 'collect' || p.biz.length).slice();
+  const chosen = [];
+  while (chosen.length < 3 && pool.length) chosen.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
+  p.daily = { day, bonus: false, missions: chosen.map((m) => ({ type: m.type, goal: m.goal(p.lvl), done: 0, claimed: false })) };
+}
+
+function progress(p, type, amount) {
+  if (!p.daily) return;
+  for (const m of p.daily.missions) if (m.type === type && !m.claimed) m.done = Math.min(m.goal, m.done + amount);
+}
+
+function missionsView(p, uid, note) {
+  const d = p.daily;
+  const ready = d.missions.filter((m) => m.done >= m.goal && !m.claimed).length;
+  const lines = d.missions.map((m) => {
+    const t = MISSION_TYPES.find((x) => x.type === m.type);
+    const state = m.claimed ? '✅ resgatada' : m.done >= m.goal ? '🎁 pronta!' : bar(m.done, m.goal, 8) + ' ' + m.done + '/' + m.goal;
+    return t.icon + ' ' + t.label(m.goal) + '\n└ ' + state + ' • prêmio ' + money(missionReward(p.lvl));
+  }).join('\n\n');
+  const allClaimed = d.missions.every((m) => m.claimed);
+  const embed = new EmbedBuilder().setColor(0xe67e22).setTitle('📋 Missões do dia')
+    .setDescription((note ? note + '\n\n' : '') + lines + '\n\n🏅 Complete **todas** e ganhe bônus de ' + money(bonusReward(p.lvl)) + ' + 1 kit' + (d.bonus ? ' — ✅ já recebido' : '') +
+      '\n🔄 Novas missões todo dia à meia-noite (horário de Brasília).');
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId('rpg:claim:' + uid).setLabel('Resgatar' + (ready ? ' (' + ready + ')' : '')).setEmoji('🎁').setStyle(ButtonStyle.Success).setDisabled(!ready && (d.bonus || !allClaimed)),
+    new ButtonBuilder().setCustomId('rpg:menu:' + uid).setLabel('Voltar').setEmoji('↩️').setStyle(ButtonStyle.Secondary));
+  return { embeds: [embed], components: [row] };
+}
+
+function claim(p) {
+  const d = p.daily;
+  let cash = 0;
+  let n = 0;
+  for (const m of d.missions) if (m.done >= m.goal && !m.claimed) { m.claimed = true; cash += missionReward(p.lvl); n++; }
+  let text = n ? '🎁 ' + n + ' missão(ões) resgatada(s): **+' + money(cash) + '**' : '';
+  if (!d.bonus && d.missions.every((m) => m.claimed)) {
+    d.bonus = true;
+    cash += bonusReward(p.lvl);
+    p.kits++;
+    text += (text ? '\n' : '') + '🏅 **Bônus do dia!** +' + money(bonusReward(p.lvl)) + ' e +1 💊 kit';
+  }
+  p.cash += cash;
+  db.save();
+  return text || 'Nada para resgatar ainda.';
+}
+
 /* ---------- ações ---------- */
 function fight(p, uid) {
   const left = (fightCd.get(uid) || 0) - Date.now();
@@ -178,6 +244,7 @@ function fight(p, uid) {
   if (r.won) {
     const cash = rand(e.cash[0], e.cash[1]);
     p.cash += cash; p.xp += e.xp; p.wins++;
+    progress(p, 'win', 1); progress(p, 'cash', cash); progress(p, 'xp', e.xp);
     text = (e.boss ? '👑 **O Chefão em pessoa!** ' : '') + e.emoji + ' **' + e.name + '** foi derrubado!\n' + sum + '\n🏆 **Vitória!** +' + money(cash) + ' • +' + e.xp + ' XP';
     while (p.xp >= xpNeeded(p.lvl)) {
       p.xp -= xpNeeded(p.lvl);
@@ -198,6 +265,7 @@ function useKit(p) {
   if (p.kits < 1) return '💊 Você não tem kits. Compre na 🛒 Loja.';
   if (p.hp >= maxHp(p)) return '❤️ Sua vida já está cheia.';
   p.kits--;
+  progress(p, 'heal', 1);
   p.hp = Math.min(maxHp(p), p.hp + kitHeal(p));
   db.save();
   return '💊 Kit usado! Vida: **' + p.hp + '/' + maxHp(p) + '**';
@@ -222,7 +290,7 @@ async function handleSlash(i, helpers) {
   if (i.commandName === 'aventura') {
     const p = player(i.guild.id, i.user.id);
     db.save();
-    await i.reply({ embeds: [profileEmbed(p, i.user, '🕴️ Bem-vindo ao submundo! Lute, junte grana e compre equipamentos.')], components: [menuRow(i.user.id)], flags: EPHEMERAL });
+    await i.reply({ embeds: [profileEmbed(p, i.user, '🕴️ Bem-vindo ao submundo! Lute, junte grana e compre equipamentos.')], components: menuRows(i.user.id), flags: EPHEMERAL });
     return true;
   }
   const all = Object.entries(db.data.rpg[i.guild.id] || {}).sort((a, b) => b[1].lvl - a[1].lvl || b[1].xp - a[1].xp || b[1].wins - a[1].wins).slice(0, 10);
@@ -240,7 +308,7 @@ async function handleButton(i) {
     const embeds = [];
     if (extraText && color) embeds.push(new EmbedBuilder().setColor(color).setDescription(extraText));
     embeds.push(profileEmbed(p, i.user, color ? '' : extraText));
-    return i.update({ embeds, components: [menuRow(uid)] });
+    return i.update({ embeds, components: menuRows(uid) });
   };
   switch (action) {
     case 'menu': return back();
@@ -250,6 +318,8 @@ async function handleButton(i) {
     case 'buyw': return i.update(shopView(p, uid, buy(p, WEAPONS, extra, 'weapon')));
     case 'buya': return i.update(shopView(p, uid, buy(p, ARMORS, extra, 'armor')));
     case 'biz': return i.update(bizView(p, uid));
+    case 'missions': return i.update(missionsView(p, uid));
+    case 'claim': { const t = claim(p); return i.update(missionsView(p, uid, t)); }
     case 'collect': {
       const n = pending(p);
       if (!p.biz.length) return i.update(bizView(p, uid, '🏢 Você ainda não tem negócios. Compre o primeiro!'));
@@ -266,4 +336,4 @@ async function handleButton(i) {
   }
 }
 
-module.exports = { commands, handleSlash, handleButton, _t: { pickEnemy, simulate, player, atkOf, defOf, maxHp, WEAPONS, ARMORS, xpNeeded, fight, buy, useKit, fightCd, buyBiz, collect, pending, incomePerHour } };
+module.exports = { commands, handleSlash, handleButton, _t: { pickEnemy, simulate, player, atkOf, defOf, maxHp, WEAPONS, ARMORS, xpNeeded, fight, buy, useKit, fightCd, buyBiz, collect, pending, incomePerHour, ensureDaily, progress, claim, MISSION_TYPES } };
