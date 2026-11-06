@@ -48,7 +48,7 @@ const START = { lvl: 1, xp: 0, hp: 110, cash: 250, weapon: 'faca', armor: '', ki
 
 // Classes: cada uma tem um jeito de jogar. Valores são multiplicadores.
 const CLASSES = {
-  mafioso: { id: 'mafioso', name: 'Mafioso', emoji: '🕴️', desc: 'Brutamontes: **+20% de vida** e **+8% de dano**. Ideal para quem gosta de lutar.', hp: 1.2, dmg: 1.08, cash: 1, biz: 1, crit: 0, mission: 1, heal: 1 },
+  mafioso: { id: 'mafioso', name: 'Mafioso', emoji: '🕴️', desc: 'Brutamontes: **+15% de vida** e **+4% de dano**. Ideal para quem gosta de lutar.', hp: 1.15, dmg: 1.04, cash: 1, biz: 1, crit: 0, mission: 1, heal: 1 },
   contrabandista: { id: 'contrabandista', name: 'Contrabandista', emoji: '📦', desc: 'Faro para negócios: **+25% de grana nas lutas** e **+10% de renda** dos negócios.', hp: 1, dmg: 1, cash: 1.25, biz: 1.1, crit: 0, mission: 1, heal: 1 },
   hacker: { id: 'hacker', name: 'Hacker', emoji: '💻', desc: 'Cabeça fria: **20% de chance de golpe crítico** (dano x1,8), **+25% nos prêmios de missão** e kits curam **+20%**.', hp: 1, dmg: 1, cash: 1, biz: 1, crit: 0.2, mission: 1.25, heal: 1.2 },
 };

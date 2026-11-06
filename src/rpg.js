@@ -12,6 +12,10 @@ const money = (n) => '$' + Number(n).toLocaleString('pt-BR');
 const commands = [
   new SlashCommandBuilder().setName('aventura').setDescription('🕴️ Sua carreira na máfia: lute, ganhe grana e compre equipamentos'),
   new SlashCommandBuilder().setName('aventuraranking').setDescription('🏆 Os maiores mafiosos do servidor'),
+  new SlashCommandBuilder().setName('duelo').setDescription('⚔️ Desafie outro membro para um duelo (vale os equipamentos de cada um)')
+    .addUserOption((o) => o.setName('membro').setDescription('Quem você quer desafiar').setRequired(true))
+    .addIntegerOption((o) => o.setName('aposta').setDescription('Grana apostada (opcional)').setMinValue(0).setMaxValue(1000000)),
+  new SlashCommandBuilder().setName('chefe').setDescription('👑 O chefão da semana: todo o servidor ataca junto'),
 ];
 const NAMES = new Set(commands.map((c) => c.name));
 
@@ -109,7 +113,8 @@ function menuRows(uid) {
     new ButtonBuilder().setCustomId('rpg:menu:' + uid).setLabel('Perfil').setEmoji('🪪').setStyle(ButtonStyle.Secondary));
   const row2 = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId('rpg:missions:' + uid).setLabel('Missões do dia').setEmoji('📋').setStyle(ButtonStyle.Success),
-    new ButtonBuilder().setCustomId('rpg:class:' + uid).setLabel('Classe').setEmoji('🎭').setStyle(ButtonStyle.Secondary));
+    new ButtonBuilder().setCustomId('rpg:class:' + uid).setLabel('Classe').setEmoji('🎭').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('rpg:boss:' + uid).setLabel('Chefão da semana').setEmoji('👑').setStyle(ButtonStyle.Danger));
   return [row1, row2];
 }
 
@@ -278,6 +283,204 @@ function claim(p) {
   return text || 'Nada para resgatar ainda.';
 }
 
+/* ---------- duelos entre membros ---------- */
+const duelCd = new Map();
+const critHit = (p) => Math.random() < clsOf(p).crit;
+
+function duelSim(a, b) {
+  let ha = maxHp(a);
+  let hb = maxHp(b);
+  const maxA = ha;
+  const maxB = hb;
+  let turn = Math.random() < 0.5 ? 0 : 1;
+  let rounds = 0;
+  while (ha > 0 && hb > 0 && rounds < 60) {
+    const att = turn === 0 ? a : b;
+    const def = turn === 0 ? b : a;
+    const dmg = Math.max(1, Math.round(atkOf(att) * (0.85 + Math.random() * 0.3) * (critHit(att) ? 1.8 : 1) * reduction(defOf(def))));
+    if (turn === 0) hb -= dmg; else ha -= dmg;
+    turn = 1 - turn;
+    rounds++;
+  }
+  const winner = ha > 0 && hb <= 0 ? 'a' : hb > 0 && ha <= 0 ? 'b' : ha / maxA >= hb / maxB ? 'a' : 'b';
+  return { winner, ha: Math.max(0, ha), hb: Math.max(0, hb), maxA, maxB, rounds };
+}
+
+function duelCard(p, name) {
+  const w = weaponOf(p);
+  const ar = armorOf(p);
+  return (clsOf(p).emoji || '🕴️') + ' **' + name + '** • nv ' + p.lvl + '\n' + w.emoji + ' ' + w.name + ' • ' + ar.emoji + ' ' + ar.name + '\n❤️ ' + maxHp(p) + ' • ⚔️ ' + atkOf(p) + ' • 🛡️ ' + defOf(p);
+}
+
+async function duelStart(i) {
+  const target = i.options.getUser('membro');
+  const bet = i.options.getInteger('aposta') || 0;
+  if (target.bot) return i.reply({ content: 'Bots não duelam. 🤖', flags: EPHEMERAL });
+  if (target.id === i.user.id) return i.reply({ content: 'Você não pode duelar contra você mesmo.', flags: EPHEMERAL });
+  const left = (duelCd.get(i.user.id) || 0) - Date.now();
+  if (left > 0) return i.reply({ content: '⏳ Espere ' + Math.ceil(left / 1000) + 's para desafiar de novo.', flags: EPHEMERAL });
+  const me = player(i.guild.id, i.user.id);
+  if (me.cash < bet) return i.reply({ content: '💸 Você não tem ' + money(bet) + ' para apostar.', flags: EPHEMERAL });
+  duelCd.set(i.user.id, Date.now() + 30000);
+  const exp = (Date.now() + 2 * 60 * 1000).toString(36);
+  const base = ':' + target.id + ':' + i.user.id + ':' + bet + ':' + exp;
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId('rpg:duelyes' + base).setLabel('Aceitar').setEmoji('⚔️').setStyle(ButtonStyle.Danger),
+    new ButtonBuilder().setCustomId('rpg:duelno' + base).setLabel('Recusar').setEmoji('🏳️').setStyle(ButtonStyle.Secondary));
+  const embed = new EmbedBuilder().setColor(0xe74c3c).setTitle('⚔️ Desafio de duelo!')
+    .setDescription('<@' + i.user.id + '> desafiou <@' + target.id + '>' + (bet ? ' valendo **' + money(bet) + '**' : ' (sem aposta)') + '!\n\n' +
+      duelCard(me, i.member?.displayName || i.user.username) + '\n\n' +
+      '<@' + target.id + '>, você tem 2 minutos para aceitar. O duelo usa os equipamentos de cada um e **não gasta sua vida**.');
+  return i.reply({ embeds: [embed], components: [row], allowedMentions: { users: [target.id] } });
+}
+
+const duelDone = new Set();
+async function duelAnswer(i, parts) {
+  const [, action, targetId, challengerId, betStr, expStr] = parts;
+  const bet = Number(betStr) || 0;
+  if (duelDone.has(i.message.id)) return i.reply({ content: 'Esse duelo já foi resolvido.', flags: EPHEMERAL });
+  if (Date.now() > parseInt(expStr, 36)) {
+    duelDone.add(i.message.id);
+    return i.update({ embeds: [new EmbedBuilder().setColor(0x808080).setTitle('⌛ Desafio expirado').setDescription('<@' + targetId + '> não respondeu a tempo.')], components: [], allowedMentions: { parse: [] } });
+  }
+  duelDone.add(i.message.id);
+  if (duelDone.size > 500) duelDone.delete(duelDone.values().next().value);
+  if (action === 'duelno') {
+    return i.update({ embeds: [new EmbedBuilder().setColor(0x808080).setTitle('🏳️ Desafio recusado').setDescription('<@' + targetId + '> recusou o duelo de <@' + challengerId + '>.')], components: [], allowedMentions: { parse: [] } });
+  }
+  const a = player(i.guild.id, challengerId);
+  const b = player(i.guild.id, targetId);
+  if (bet && (a.cash < bet || b.cash < bet)) {
+    return i.update({ embeds: [new EmbedBuilder().setColor(0x808080).setTitle('💸 Duelo cancelado').setDescription('Um dos dois não tem mais ' + money(bet) + ' para a aposta.')], components: [], allowedMentions: { parse: [] } });
+  }
+  const names = async (id) => { const m = await i.guild.members.fetch(id).catch(() => null); return (m && m.displayName) || 'Membro'; };
+  const na = await names(challengerId);
+  const nb = await names(targetId);
+  const r = duelSim(a, b);
+  const winId = r.winner === 'a' ? challengerId : targetId;
+  const win = r.winner === 'a' ? a : b;
+  const lose = r.winner === 'a' ? b : a;
+  win.duelWins = (win.duelWins || 0) + 1;
+  lose.duelLosses = (lose.duelLosses || 0) + 1;
+  if (bet) { win.cash += bet; lose.cash -= bet; }
+  db.save();
+  const embed = new EmbedBuilder().setColor(0xf1c40f).setTitle('🏆 Duelo: ' + na + ' vs ' + nb)
+    .setDescription(duelCard(a, na) + '\n\n' + duelCard(b, nb) + '\n\n⚔️ ' + r.rounds + ' golpes • ❤️ ' + na + ': ' + r.ha + '/' + r.maxA + ' • ❤️ ' + nb + ': ' + r.hb + '/' + r.maxB +
+      '\n\n👑 **Vencedor: <@' + winId + '>**' + (bet ? ' — leva ' + money(bet) + '!' : '!'));
+  return i.update({ embeds: [embed], components: [], allowedMentions: { parse: [] } });
+}
+
+/* ---------- chefão da semana ---------- */
+const BOSS_NAMES = [['Don Vittorio, o Cão Sarnento', '🐺'], ['O Barão do Porto', '⚓'], ['A Viúva Negra', '🕷️'], ['Capo dei Capi', '👑'], ['O Senhor do Submundo', '😈'], ['Il Dottore', '🩺'], ['A Sombra de Palermo', '🥷']];
+const BOSS_TRIES_PER_DAY = 3;
+const BOSS_ROUNDS = 8;
+
+function weekKey() {
+  const [y, m, d] = dayKey().split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(d - ((dt.getUTCDay() + 6) % 7)); // segunda-feira
+  return dt.toISOString().slice(0, 10);
+}
+
+const power = (p) => atkOf(p) * maxHp(p) / reduction(defOf(p));
+const topRank = (boss) => Object.entries(boss.dmg).sort((x, y) => y[1] - x[1]);
+
+/** Paga os prêmios (uma vez só). share = fração do prêmio total distribuída pelo dano. */
+function payBoss(guildId, boss, share, finisher) {
+  if (boss.paid) return [];
+  boss.paid = true;
+  const rank = topRank(boss);
+  const total = rank.reduce((s, [, d]) => s + d, 0) || 1;
+  const pool = Math.round(boss.pool * share);
+  const lines = [];
+  rank.forEach(([id, d], n) => {
+    const p = (db.data.rpg[guildId] ||= {})[id];
+    if (!p) return;
+    let cash = Math.max(100, Math.round(pool * d / total));
+    let extra = '';
+    if (n === 0) { p.kits = (p.kits || 0) + 2; extra += ' +2 💊'; }
+    else if (n < 3) { p.kits = (p.kits || 0) + 1; extra += ' +1 💊'; }
+    if (finisher && id === finisher) { cash += Math.round(boss.pool * 0.1); extra += ' (golpe final!)'; }
+    p.cash += cash;
+    lines.push((['🥇', '🥈', '🥉'][n] || '▫️') + ' <@' + id + '> — ' + d.toLocaleString('pt-BR') + ' de dano • +' + money(cash) + extra);
+  });
+  db.save();
+  return lines.slice(0, 10);
+}
+
+function ensureBoss(guildId, announce) {
+  const store = db.data.rpgboss;
+  const wk = weekKey();
+  let boss = store[guildId];
+  let escaped = null;
+  if (boss && boss.week !== wk) {
+    // o chefe da semana passada: paga 30% do prêmio pela participação, se ninguém o derrubou
+    if (!boss.defeated && !boss.paid && Object.keys(boss.dmg).length) escaped = { boss, lines: payBoss(guildId, boss, 0.3) };
+    boss = null;
+  }
+  if (!boss) {
+    const players = Object.values(db.data.rpg[guildId] || {}).filter((p) => p && p.lvl);
+    const top = players.sort((x, y) => power(y) - power(x))[0] || { lvl: 1, weapon: '', armor: '', cls: '' };
+    const [name, emoji] = BOSS_NAMES[Math.floor(Date.parse(wk) / 604800000) % BOSS_NAMES.length];
+    const hpMax = Math.max(400, Math.round(atkOf(top) * BOSS_ROUNDS * 35));
+    boss = {
+      week: wk, name, emoji, level: top.lvl + 2, hpMax, hp: hpMax,
+      atk: Math.max(10, Math.round(maxHp(top) * 0.075 / reduction(defOf(top)))),
+      pool: Math.round(3000 + top.lvl * 900), dmg: {}, tries: {}, defeated: false, paid: false,
+    };
+    store[guildId] = boss;
+    db.save();
+    if (announce) announce('new', boss);
+  }
+  return { boss, escaped };
+}
+
+function bossView(p, uid, boss, note) {
+  const day = dayKey();
+  const used = p.bossDay === day ? p.bossTries || 0 : 0;
+  const left = Math.max(0, BOSS_TRIES_PER_DAY - used);
+  const rank = topRank(boss).slice(0, 5).map(([id, d], n) => (['🥇', '🥈', '🥉'][n] || '▫️') + ' <@' + id + '> — ' + d.toLocaleString('pt-BR')).join('\n') || 'Ninguém atacou ainda.';
+  const mine = boss.dmg[uid] || 0;
+  const embed = new EmbedBuilder().setColor(boss.defeated ? 0x23a55a : 0x8e44ad).setTitle(boss.emoji + ' Chefão da semana: ' + boss.name)
+    .setDescription((note ? note + '\n\n' : '') +
+      (boss.defeated ? '✅ **Derrotado!** Voltará na próxima segunda-feira.' : '❤️ ' + bar(boss.hp, boss.hpMax, 12) + ' ' + boss.hp.toLocaleString('pt-BR') + '/' + boss.hpMax.toLocaleString('pt-BR')) +
+      '\n\n**Ranking de dano**\n' + rank + '\n\nSeu dano: **' + mine.toLocaleString('pt-BR') + '** • Tentativas hoje: **' + left + '/' + BOSS_TRIES_PER_DAY + '**' +
+      '\n\n🎁 Prêmio total: ' + money(boss.pool) + ' dividido pelo dano de cada um + kits para o top 3. Se ninguém o derrubar até domingo, ele escapa e paga só 30%.' +
+      '\n⚠️ Cada ataque dura até ' + BOSS_ROUNDS + ' rodadas e custa vida (precisa de mais de 35%).');
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId('rpg:bossatk:' + uid).setLabel('Atacar').setEmoji('⚔️').setStyle(ButtonStyle.Danger).setDisabled(boss.defeated || left < 1),
+    new ButtonBuilder().setCustomId('rpg:boss:' + uid).setLabel('Atualizar').setEmoji('🔄').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('rpg:menu:' + uid).setLabel('Voltar').setEmoji('↩️').setStyle(ButtonStyle.Secondary));
+  return { embeds: [embed], components: [row] };
+}
+
+/** Um ataque ao chefão. Devolve { text, killed }. */
+function bossAttack(p, uid, boss) {
+  if (boss.defeated) return { text: '✅ O chefão já foi derrotado esta semana!' };
+  const day = dayKey();
+  if (p.bossDay !== day) { p.bossDay = day; p.bossTries = 0; }
+  if (p.bossTries >= BOSS_TRIES_PER_DAY) return { text: '⏳ Você já usou as ' + BOSS_TRIES_PER_DAY + ' tentativas de hoje. Volte amanhã!' };
+  if (p.hp < Math.ceil(maxHp(p) * 0.35)) return { text: '🩸 Você está ferido demais. Use um 💊 kit ou espere a vida voltar.' };
+  p.bossTries++;
+  let hp = p.hp;
+  let dealt = 0;
+  let r = 0;
+  for (; r < BOSS_ROUNDS && hp > 0; r++) {
+    const crit = critHit(p);
+    dealt += Math.max(1, Math.round(atkOf(p) * (0.85 + Math.random() * 0.3) * (crit ? 1.8 : 1)));
+    hp -= Math.max(1, Math.round(boss.atk * (0.85 + Math.random() * 0.3) * reduction(defOf(p))));
+  }
+  const ko = hp <= 0;
+  p.hp = ko ? Math.max(1, Math.round(maxHp(p) * 0.1)) : hp;
+  dealt = Math.min(dealt, boss.hp);
+  boss.hp -= dealt;
+  boss.dmg[uid] = (boss.dmg[uid] || 0) + dealt;
+  let killed = false;
+  if (boss.hp <= 0) { boss.hp = 0; boss.defeated = true; killed = true; }
+  db.save();
+  return { text: boss.emoji + ' Você atacou **' + boss.name + '** por ' + r + ' rodada(s) e causou **' + dealt.toLocaleString('pt-BR') + '** de dano!' + (ko ? '\n💫 Você foi nocauteado e ficou com ' + p.hp + ' de vida.' : '\n❤️ Vida: ' + p.hp + '/' + maxHp(p)), killed };
+}
+
 /* ---------- ações ---------- */
 function fight(p, uid) {
   const left = (fightCd.get(uid) || 0) - Date.now();
@@ -344,6 +547,14 @@ async function handleSlash(i, helpers) {
     await i.reply({ embeds: [profileEmbed(p, i.user, '🕴️ Bem-vindo ao submundo! Lute, junte grana e compre equipamentos.')], components: menuRows(i.user.id), flags: EPHEMERAL });
     return true;
   }
+  if (i.commandName === 'duelo') { await duelStart(i); return true; }
+  if (i.commandName === 'chefe') {
+    const p = player(i.guild.id, i.user.id);
+    const { boss, escaped } = ensureBoss(i.guild.id);
+    await announceEscaped(i.channel, escaped);
+    await i.reply({ ...bossView(p, i.user.id, boss), flags: EPHEMERAL, allowedMentions: { parse: [] } });
+    return true;
+  }
   const all = Object.entries(db.data.rpg[i.guild.id] || {}).sort((a, b) => b[1].lvl - a[1].lvl || b[1].xp - a[1].xp || b[1].wins - a[1].wins).slice(0, 10);
   const medals = ['🥇', '🥈', '🥉'];
   const text = all.map(([id, p], n) => (medals[n] || '**' + (n + 1) + '.**') + ' <@' + id + '> — nível **' + p.lvl + '** • ' + p.wins + ' vitórias • ' + money(p.cash)).join('\n') || 'Ninguém jogou ainda. Use /aventura!';
@@ -351,8 +562,18 @@ async function handleSlash(i, helpers) {
   return true;
 }
 
+/** Se o chefe da semana passada escapou, avisa o canal com quem recebeu o quê. */
+async function announceEscaped(channel, escaped) {
+  if (!escaped || !escaped.lines.length || !channel) return;
+  await channel.send({ embeds: [new EmbedBuilder().setColor(0x808080).setTitle('🌫️ ' + escaped.boss.name + ' escapou!').setDescription('Ninguém o derrubou a tempo. Prêmio de participação:\n' + escaped.lines.join('\n'))], allowedMentions: { parse: [] } }).catch(() => {});
+}
+
 async function handleButton(i) {
   const [, action, uid, extra] = i.customId.split(':');
+  if (action === 'duelyes' || action === 'duelno') {
+    if (i.user.id !== uid) return i.reply({ content: 'Só quem foi desafiado pode responder.', flags: EPHEMERAL });
+    return duelAnswer(i, i.customId.split(':'));
+  }
   if (i.user.id !== uid) return i.reply({ content: 'Esse menu é de outra pessoa. Use /aventura para abrir o seu.', flags: EPHEMERAL });
   const p = player(i.guild.id, uid);
   const back = (extraText, color) => {
@@ -378,6 +599,23 @@ async function handleButton(i) {
       collect(p);
       return i.update(bizView(p, uid, '💰 Você coletou **' + money(n) + '**!'));
     }
+    case 'boss': {
+      const { boss, escaped } = ensureBoss(i.guild.id);
+      await announceEscaped(i.channel, escaped);
+      return i.update(bossView(p, uid, boss));
+    }
+    case 'bossatk': {
+      const { boss, escaped } = ensureBoss(i.guild.id);
+      await announceEscaped(i.channel, escaped);
+      const r = bossAttack(p, uid, boss);
+      await i.update(bossView(p, uid, boss, r.text));
+      if (r.killed) {
+        const lines = payBoss(i.guild.id, boss, 1, uid);
+        await i.channel.send({ embeds: [new EmbedBuilder().setColor(0x23a55a).setTitle('☠️ ' + boss.name + ' foi derrotado!')
+          .setDescription('<@' + uid + '> deu o golpe final! Prêmios:\n' + lines.join('\n'))], allowedMentions: { parse: [] } }).catch(() => {});
+      }
+      return;
+    }
     case 'class': return i.update(classView(p, uid));
     case 'pickcls': return i.update(classView(p, uid, pickClass(p, extra)));
     case 'buykit': {
@@ -395,4 +633,4 @@ async function handleSelect(i) {
   if (action === 'bizsel') return i.update(bizView(p, uid, buyBiz(p, i.values[0])));
 }
 
-module.exports = { commands, handleSlash, handleButton, handleSelect, _t: { pickEnemy, simulate, player, atkOf, defOf, maxHp, WEAPONS, ARMORS, xpNeeded, fight, buy, useKit, fightCd, buyBiz, collect, pending, incomePerHour, pickClass, clsOf, bizLevel, upgradeCost, ensureDaily, progress, claim, MISSION_TYPES } };
+module.exports = { commands, handleSlash, handleButton, handleSelect, _t: { duelSim, ensureBoss, bossAttack, payBoss, weekKey, power, BOSS_TRIES_PER_DAY, pickEnemy, simulate, player, atkOf, defOf, maxHp, WEAPONS, ARMORS, xpNeeded, fight, buy, useKit, fightCd, buyBiz, collect, pending, incomePerHour, pickClass, clsOf, bizLevel, upgradeCost, ensureDaily, progress, claim, MISSION_TYPES } };

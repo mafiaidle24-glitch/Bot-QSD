@@ -6,13 +6,14 @@ const DIR = process.env.DATA_DIR || path.join(__dirname, '..', 'data');
 const FILE = path.join(DIR, 'db.json');
 fs.mkdirSync(DIR, { recursive: true });
 
-let data = { guilds: {}, users: {}, warns: {}, rpg: {} };
+let data = { guilds: {}, users: {}, warns: {}, rpg: {}, rpgboss: {} };
 try {
   const raw = JSON.parse(fs.readFileSync(FILE, 'utf8'));
   data.guilds = raw.guilds || {};
   data.users = raw.users || {};
   data.warns = raw.warns || {};
   data.rpg = raw.rpg || {};
+  data.rpgboss = raw.rpgboss || {};
 } catch {
   /* arquivo novo */
 }
