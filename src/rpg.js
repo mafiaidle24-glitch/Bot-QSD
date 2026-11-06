@@ -113,7 +113,8 @@ function menuRows(uid) {
     new ButtonBuilder().setCustomId('rpg:menu:' + uid).setLabel('Perfil').setEmoji('🪪').setStyle(ButtonStyle.Secondary));
   const row2 = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId('rpg:missions:' + uid).setLabel('Missões do dia').setEmoji('📋').setStyle(ButtonStyle.Success),
-    new ButtonBuilder().setCustomId('rpg:class:' + uid).setLabel('Classe').setEmoji('🎭').setStyle(ButtonStyle.Secondary));
+    new ButtonBuilder().setCustomId('rpg:class:' + uid).setLabel('Classe').setEmoji('🎭').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('rpg:boss:' + uid).setLabel('Chefão da semana').setEmoji('👑').setStyle(ButtonStyle.Danger));
   return [row1, row2];
 }
 
@@ -308,7 +309,7 @@ function duelSim(a, b) {
 function duelCard(p, name) {
   const w = weaponOf(p);
   const ar = armorOf(p);
-  return (clsOf(p).emoji || '🕴️') + ' **' + name + '** • nv ' + p.lvl + '\\n' + w.emoji + ' ' + w.name + ' • ' + ar.emoji + ' ' + ar.name + '\\n❤️ ' + maxHp(p) + ' • ⚔️ ' + atkOf(p) + ' • 🛡️ ' + defOf(p);
+  return (clsOf(p).emoji || '🕴️') + ' **' + name + '** • nv ' + p.lvl + '\n' + w.emoji + ' ' + w.name + ' • ' + ar.emoji + ' ' + ar.name + '\n❤️ ' + maxHp(p) + ' • ⚔️ ' + atkOf(p) + ' • 🛡️ ' + defOf(p);
 }
 
 async function duelStart(i) {
@@ -327,8 +328,8 @@ async function duelStart(i) {
     new ButtonBuilder().setCustomId('rpg:duelyes' + base).setLabel('Aceitar').setEmoji('⚔️').setStyle(ButtonStyle.Danger),
     new ButtonBuilder().setCustomId('rpg:duelno' + base).setLabel('Recusar').setEmoji('🏳️').setStyle(ButtonStyle.Secondary));
   const embed = new EmbedBuilder().setColor(0xe74c3c).setTitle('⚔️ Desafio de duelo!')
-    .setDescription('<@' + i.user.id + '> desafiou <@' + target.id + '>' + (bet ? ' valendo **' + money(bet) + '**' : ' (sem aposta)') + '!\\n\\n' +
-      duelCard(me, i.member?.displayName || i.user.username) + '\\n\\n' +
+    .setDescription('<@' + i.user.id + '> desafiou <@' + target.id + '>' + (bet ? ' valendo **' + money(bet) + '**' : ' (sem aposta)') + '!\n\n' +
+      duelCard(me, i.member?.displayName || i.user.username) + '\n\n' +
       '<@' + target.id + '>, você tem 2 minutos para aceitar. O duelo usa os equipamentos de cada um e **não gasta sua vida**.');
   return i.reply({ embeds: [embed], components: [row], allowedMentions: { users: [target.id] } });
 }
@@ -364,8 +365,8 @@ async function duelAnswer(i, parts) {
   if (bet) { win.cash += bet; lose.cash -= bet; }
   db.save();
   const embed = new EmbedBuilder().setColor(0xf1c40f).setTitle('🏆 Duelo: ' + na + ' vs ' + nb)
-    .setDescription(duelCard(a, na) + '\\n\\n' + duelCard(b, nb) + '\\n\\n⚔️ ' + r.rounds + ' golpes • ❤️ ' + na + ': ' + r.ha + '/' + r.maxA + ' • ❤️ ' + nb + ': ' + r.hb + '/' + r.maxB +
-      '\\n\\n👑 **Vencedor: <@' + winId + '>**' + (bet ? ' — leva ' + money(bet) + '!' : '!'));
+    .setDescription(duelCard(a, na) + '\n\n' + duelCard(b, nb) + '\n\n⚔️ ' + r.rounds + ' golpes • ❤️ ' + na + ': ' + r.ha + '/' + r.maxA + ' • ❤️ ' + nb + ': ' + r.hb + '/' + r.maxB +
+      '\n\n👑 **Vencedor: <@' + winId + '>**' + (bet ? ' — leva ' + money(bet) + '!' : '!'));
   return i.update({ embeds: [embed], components: [], allowedMentions: { parse: [] } });
 }
 
@@ -438,14 +439,14 @@ function bossView(p, uid, boss, note) {
   const day = dayKey();
   const used = p.bossDay === day ? p.bossTries || 0 : 0;
   const left = Math.max(0, BOSS_TRIES_PER_DAY - used);
-  const rank = topRank(boss).slice(0, 5).map(([id, d], n) => (['🥇', '🥈', '🥉'][n] || '▫️') + ' <@' + id + '> — ' + d.toLocaleString('pt-BR')).join('\\n') || 'Ninguém atacou ainda.';
+  const rank = topRank(boss).slice(0, 5).map(([id, d], n) => (['🥇', '🥈', '🥉'][n] || '▫️') + ' <@' + id + '> — ' + d.toLocaleString('pt-BR')).join('\n') || 'Ninguém atacou ainda.';
   const mine = boss.dmg[uid] || 0;
   const embed = new EmbedBuilder().setColor(boss.defeated ? 0x23a55a : 0x8e44ad).setTitle(boss.emoji + ' Chefão da semana: ' + boss.name)
-    .setDescription((note ? note + '\\n\\n' : '') +
+    .setDescription((note ? note + '\n\n' : '') +
       (boss.defeated ? '✅ **Derrotado!** Voltará na próxima segunda-feira.' : '❤️ ' + bar(boss.hp, boss.hpMax, 12) + ' ' + boss.hp.toLocaleString('pt-BR') + '/' + boss.hpMax.toLocaleString('pt-BR')) +
-      '\\n\\n**Ranking de dano**\\n' + rank + '\\n\\nSeu dano: **' + mine.toLocaleString('pt-BR') + '** • Tentativas hoje: **' + left + '/' + BOSS_TRIES_PER_DAY + '**' +
-      '\\n\\n🎁 Prêmio total: ' + money(boss.pool) + ' dividido pelo dano de cada um + kits para o top 3. Se ninguém o derrubar até domingo, ele escapa e paga só 30%.' +
-      '\\n⚠️ Cada ataque dura até ' + BOSS_ROUNDS + ' rodadas e custa vida (precisa de mais de 35%).');
+      '\n\n**Ranking de dano**\n' + rank + '\n\nSeu dano: **' + mine.toLocaleString('pt-BR') + '** • Tentativas hoje: **' + left + '/' + BOSS_TRIES_PER_DAY + '**' +
+      '\n\n🎁 Prêmio total: ' + money(boss.pool) + ' dividido pelo dano de cada um + kits para o top 3. Se ninguém o derrubar até domingo, ele escapa e paga só 30%.' +
+      '\n⚠️ Cada ataque dura até ' + BOSS_ROUNDS + ' rodadas e custa vida (precisa de mais de 35%).');
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId('rpg:bossatk:' + uid).setLabel('Atacar').setEmoji('⚔️').setStyle(ButtonStyle.Danger).setDisabled(boss.defeated || left < 1),
     new ButtonBuilder().setCustomId('rpg:boss:' + uid).setLabel('Atualizar').setEmoji('🔄').setStyle(ButtonStyle.Secondary),
@@ -477,7 +478,7 @@ function bossAttack(p, uid, boss) {
   let killed = false;
   if (boss.hp <= 0) { boss.hp = 0; boss.defeated = true; killed = true; }
   db.save();
-  return { text: boss.emoji + ' Você atacou **' + boss.name + '** por ' + r + ' rodada(s) e causou **' + dealt.toLocaleString('pt-BR') + '** de dano!' + (ko ? '\\n💫 Você foi nocauteado e ficou com ' + p.hp + ' de vida.' : '\\n❤️ Vida: ' + p.hp + '/' + maxHp(p)), killed };
+  return { text: boss.emoji + ' Você atacou **' + boss.name + '** por ' + r + ' rodada(s) e causou **' + dealt.toLocaleString('pt-BR') + '** de dano!' + (ko ? '\n💫 Você foi nocauteado e ficou com ' + p.hp + ' de vida.' : '\n❤️ Vida: ' + p.hp + '/' + maxHp(p)), killed };
 }
 
 /* ---------- ações ---------- */
@@ -546,6 +547,14 @@ async function handleSlash(i, helpers) {
     await i.reply({ embeds: [profileEmbed(p, i.user, '🕴️ Bem-vindo ao submundo! Lute, junte grana e compre equipamentos.')], components: menuRows(i.user.id), flags: EPHEMERAL });
     return true;
   }
+  if (i.commandName === 'duelo') { await duelStart(i); return true; }
+  if (i.commandName === 'chefe') {
+    const p = player(i.guild.id, i.user.id);
+    const { boss, escaped } = ensureBoss(i.guild.id);
+    await announceEscaped(i.channel, escaped);
+    await i.reply({ ...bossView(p, i.user.id, boss), flags: EPHEMERAL, allowedMentions: { parse: [] } });
+    return true;
+  }
   const all = Object.entries(db.data.rpg[i.guild.id] || {}).sort((a, b) => b[1].lvl - a[1].lvl || b[1].xp - a[1].xp || b[1].wins - a[1].wins).slice(0, 10);
   const medals = ['🥇', '🥈', '🥉'];
   const text = all.map(([id, p], n) => (medals[n] || '**' + (n + 1) + '.**') + ' <@' + id + '> — nível **' + p.lvl + '** • ' + p.wins + ' vitórias • ' + money(p.cash)).join('\n') || 'Ninguém jogou ainda. Use /aventura!';
@@ -553,8 +562,18 @@ async function handleSlash(i, helpers) {
   return true;
 }
 
+/** Se o chefe da semana passada escapou, avisa o canal com quem recebeu o quê. */
+async function announceEscaped(channel, escaped) {
+  if (!escaped || !escaped.lines.length || !channel) return;
+  await channel.send({ embeds: [new EmbedBuilder().setColor(0x808080).setTitle('🌫️ ' + escaped.boss.name + ' escapou!').setDescription('Ninguém o derrubou a tempo. Prêmio de participação:\n' + escaped.lines.join('\n'))], allowedMentions: { parse: [] } }).catch(() => {});
+}
+
 async function handleButton(i) {
   const [, action, uid, extra] = i.customId.split(':');
+  if (action === 'duelyes' || action === 'duelno') {
+    if (i.user.id !== uid) return i.reply({ content: 'Só quem foi desafiado pode responder.', flags: EPHEMERAL });
+    return duelAnswer(i, i.customId.split(':'));
+  }
   if (i.user.id !== uid) return i.reply({ content: 'Esse menu é de outra pessoa. Use /aventura para abrir o seu.', flags: EPHEMERAL });
   const p = player(i.guild.id, uid);
   const back = (extraText, color) => {
@@ -580,6 +599,23 @@ async function handleButton(i) {
       collect(p);
       return i.update(bizView(p, uid, '💰 Você coletou **' + money(n) + '**!'));
     }
+    case 'boss': {
+      const { boss, escaped } = ensureBoss(i.guild.id);
+      await announceEscaped(i.channel, escaped);
+      return i.update(bossView(p, uid, boss));
+    }
+    case 'bossatk': {
+      const { boss, escaped } = ensureBoss(i.guild.id);
+      await announceEscaped(i.channel, escaped);
+      const r = bossAttack(p, uid, boss);
+      await i.update(bossView(p, uid, boss, r.text));
+      if (r.killed) {
+        const lines = payBoss(i.guild.id, boss, 1, uid);
+        await i.channel.send({ embeds: [new EmbedBuilder().setColor(0x23a55a).setTitle('☠️ ' + boss.name + ' foi derrotado!')
+          .setDescription('<@' + uid + '> deu o golpe final! Prêmios:\n' + lines.join('\n'))], allowedMentions: { parse: [] } }).catch(() => {});
+      }
+      return;
+    }
     case 'class': return i.update(classView(p, uid));
     case 'pickcls': return i.update(classView(p, uid, pickClass(p, extra)));
     case 'buykit': {
@@ -597,4 +633,4 @@ async function handleSelect(i) {
   if (action === 'bizsel') return i.update(bizView(p, uid, buyBiz(p, i.values[0])));
 }
 
-module.exports = { commands, handleSlash, handleButton, handleSelect, _t: { pickEnemy, simulate, player, atkOf, defOf, maxHp, WEAPONS, ARMORS, xpNeeded, fight, buy, useKit, fightCd, buyBiz, collect, pending, incomePerHour, pickClass, clsOf, bizLevel, upgradeCost, ensureDaily, progress, claim, MISSION_TYPES } };
+module.exports = { commands, handleSlash, handleButton, handleSelect, _t: { duelSim, ensureBoss, bossAttack, payBoss, weekKey, power, BOSS_TRIES_PER_DAY, pickEnemy, simulate, player, atkOf, defOf, maxHp, WEAPONS, ARMORS, xpNeeded, fight, buy, useKit, fightCd, buyBiz, collect, pending, incomePerHour, pickClass, clsOf, bizLevel, upgradeCost, ensureDaily, progress, claim, MISSION_TYPES } };
