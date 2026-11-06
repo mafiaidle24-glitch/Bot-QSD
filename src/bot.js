@@ -122,7 +122,21 @@ async function giveXp(guild, member, amount, channel) {
   }
   if (!target?.isTextBased()) return;
   const text = fmt(cfg.message, { member, guild, level: after });
-  if (text) await target.send({ content: text, allowedMentions: { users: [member.id] } }).catch((e) => warn('anúncio de nível', e));
+  const payload = { content: text || undefined, allowedMentions: { users: [member.id] } };
+  if (cfg.announceStyle === 'card') {
+    try {
+      const info = levelInfo(u.xp);
+      const buf = await renderRank({
+        name: nameOf(member, member.user), avatarUrl: avatarOf(member.user), level: info.level, rank: db.rankOf(guild.id, member.id),
+        current: info.current, needed: info.needed, totalXp: u.xp,
+      });
+      payload.files = [new AttachmentBuilder(buf, { name: 'nivel.png' })];
+    } catch (e) {
+      warn('cartão de nível (enviando só texto)', e);
+    }
+  }
+  if (!payload.content && !payload.files) return;
+  await target.send(payload).catch((e) => warn('anúncio de nível', e));
 }
 
 async function sendCard(kind, guild, who) {
