@@ -15,6 +15,7 @@ const { JOKES, FACTS, QUIZ, EIGHT_BALL } = require('./content');
 const tickets = require('./tickets');
 const logs = require('./logs');
 const moderation = require('./moderation');
+const minigames = require('./minigames');
 
 const EPHEMERAL = MessageFlags.Ephemeral;
 const BASE_URL = (process.env.BASE_URL || 'http://localhost:3000').replace(/\/$/, '');
@@ -531,6 +532,7 @@ client.on(Events.MessageCreate, async (msg) => {
   try { if (await wiki.handleMessage(msg)) return; } catch (e) { warn('wiki', e); }
   try { if (await handleCustomCommand(msg, cfg)) return; } catch (e) { warn('comando personalizado', e); }
   try { await handleGuess(msg); } catch (e) { warn('jogo de adivinhar', e); }
+  try { await minigames.handleMessage(msg, { reward }); } catch (e) { warn('rali de palavras', e); }
   try { await handleXp(msg, cfg); } catch (e) { warn('xp', e); }
   try { await handleTranslate(msg, cfg); } catch (e) { warn('tradução', e); }
   try { await handleInteraction(msg, cfg); } catch (e) { warn('interação', e); }
@@ -567,14 +569,16 @@ async function handleGuess(msg) {
   if (n === game.number) {
     clearTimeout(game.timer);
     guessGames.delete(msg.channelId);
-    const xp = cfgs.getConfig(msg.guildId).games.rewardXp;
+    const xp = cfgs.getConfig(msg.guildId).games.rewardXp * (game.bonus || 1);
     await msg.reply({
       content: '🎉 ' + msg.author + ' acertou! O número era **' + game.number + '** (' + game.tries + ' tentativas).' + (xp ? ' +' + xp + ' XP' : ''),
       allowedMentions: { users: [msg.author.id], repliedUser: false },
     }).catch(() => {});
-    if (msg.member) await reward(msg.guild, msg.member, msg.channel);
+    if (msg.member) await giveXp(msg.guild, msg.member, xp, msg.channel).catch((e) => warn('xp de jogo', e));
   } else {
+    if (n < game.number) game.bestLow = Math.max(game.bestLow, n); else game.bestHigh = Math.min(game.bestHigh, n);
     await msg.react(n < game.number ? '⬆️' : '⬇️').catch(() => {});
+    if (game.tries % 8 === 0) await msg.channel.send('📍 Até agora: o número está entre **' + (game.bestLow + 1) + '** e **' + (game.bestHigh - 1) + '**.').catch(() => {});
   }
 }
 
@@ -661,7 +665,9 @@ const slashCommands = [
   new SlashCommandBuilder().setName('moeda').setDescription('Cara ou coroa'),
   new SlashCommandBuilder().setName('ppt').setDescription('Pedra, papel e tesoura contra o bot'),
   new SlashCommandBuilder().setName('quiz').setDescription('Pergunta relâmpago: o primeiro a acertar ganha XP'),
-  new SlashCommandBuilder().setName('adivinhar').setDescription('Adivinhe o número secreto de 1 a 100 digitando no chat'),
+  new SlashCommandBuilder().setName('adivinhar').setDescription('Adivinhe o número secreto digitando no chat')
+    .addStringOption((o) => o.setName('nivel').setDescription('Dificuldade (padrão: normal)').addChoices(
+      { name: 'Fácil (1 a 50)', value: 'facil' }, { name: 'Normal (1 a 100)', value: 'normal' }, { name: 'Difícil (1 a 1000)', value: 'dificil' })),
   new SlashCommandBuilder().setName('piada').setDescription('Uma piada (de tiozão)'),
   new SlashCommandBuilder().setName('fato').setDescription('Um fato aleatório'),
   new SlashCommandBuilder().setName('abracar').setDescription('Dê um abraço em alguém')
@@ -672,6 +678,7 @@ const slashCommands = [
   new SlashCommandBuilder().setName('ticket').setDescription('Publica o painel de tickets neste canal (somente administradores)')
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
   ...moderation.commands,
+  ...minigames.commands,
 ].map((c) => c.setDMPermission(false).toJSON());
 
 async function registerCommands(guild) {
@@ -686,6 +693,7 @@ async function registerCommands(guild) {
 async function runSlash(i) {
   const cfg = cfgs.getConfig(i.guild.id);
   if (await moderation.handleSlash(i, cfg)) return;
+  if (await minigames.handleSlash(i, { gameAllowed, reward })) return;
   switch (i.commandName) {
     case 'rank': {
       if (!cfg.levels.enabled) return i.reply({ content: 'O sistema de níveis está desativado.', flags: EPHEMERAL });
@@ -750,11 +758,19 @@ async function runSlash(i) {
     case 'adivinhar': {
       if (!gameAllowed(i)) return;
       if (guessGames.has(i.channelId)) return i.reply({ content: 'Já existe um jogo de adivinhar rolando neste canal!', flags: EPHEMERAL });
-      const game = { number: rand(1, 100), tries: 0 };
-      game.timer = setTimeout(() => guessGames.delete(i.channelId), 10 * 60 * 1000);
+      const lvl = i.options.getString('nivel') || 'normal';
+      const max = lvl === 'facil' ? 50 : lvl === 'dificil' ? 1000 : 100;
+      const game = { number: rand(1, max), max, tries: 0, bestLow: 0, bestHigh: max + 1 };
+      const channel = i.channel;
+      game.timer = setTimeout(() => {
+        guessGames.delete(i.channelId);
+        channel.send('⏰ Ninguém acertou a tempo! O número era **' + game.number + '**.').catch(() => {});
+      }, 10 * 60 * 1000);
       guessGames.set(i.channelId, game);
       const xp = cfgs.getConfig(i.guild.id).games.rewardXp;
-      return i.reply('🔢 Pensei em um número de **1 a 100**. Digite seus palpites no chat! ⬆️ = maior, ⬇️ = menor.' + (xp ? ' Quem acertar ganha **' + xp + ' XP**.' : ''));
+      const bonus = lvl === 'dificil' ? 2 : 1;
+      game.bonus = bonus;
+      return i.reply('🔢 Pensei em um número de **1 a ' + max + '**. Digite seus palpites no chat! ⬆️ = maior, ⬇️ = menor. Você tem 10 minutos.' + (xp ? ' Quem acertar ganha **' + xp * bonus + ' XP**.' : ''));
     }
     case 'piada': return i.reply('😄 ' + pick(JOKES));
     case 'fato': return i.reply('🧠 **Você sabia?** ' + pick(FACTS));
