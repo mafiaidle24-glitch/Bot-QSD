@@ -11,6 +11,7 @@ const ENEMIES = [
 ];
 
 const ITEMS = {
+  faca: { id: 'faca', kind: 'weapon', name: 'Faca de bolso', emoji: '🔪', atk: 3, price: 80 },
   taco: { id: 'taco', kind: 'weapon', name: 'Taco de beisebol', emoji: '🏏', atk: 4, price: 150 },
   pistola: { id: 'pistola', kind: 'weapon', name: 'Pistola', emoji: '🔫', atk: 9, price: 500 },
   escopeta: { id: 'escopeta', kind: 'weapon', name: 'Escopeta', emoji: '💥', atk: 16, price: 1500 },
@@ -25,6 +26,17 @@ const TITLES = [
   [1, 'Aprendiz'], [3, 'Capanga'], [6, 'Soldato'], [10, 'Caporegime'], [15, 'Subchefe'], [20, 'Chefão'],
 ];
 
-const START = { lvl: 1, xp: 0, hp: 100, cash: 100, weapon: '', armor: '', kits: 1, wins: 0, losses: 0, lastRest: 0, lastFight: 0 };
+// Negócios: rendem grana por hora (acumulam até 8 horas; é preciso coletar).
+const BUSINESSES = [
+  { id: 'bar', name: 'Bar clandestino', emoji: '🍺', price: 500, income: 30 },
+  { id: 'deposito', name: 'Depósito de contrabando', emoji: '📦', price: 1500, income: 100 },
+  { id: 'cassino', name: 'Cassino subterrâneo', emoji: '🎰', price: 3500, income: 240 },
+  { id: 'lavanderia', name: 'Lavanderia de dinheiro', emoji: '🧺', price: 9000, income: 680 },
+  { id: 'porto', name: 'Controle do porto', emoji: '🚢', price: 22000, income: 1800 },
+];
+const BIZ_CAP_HOURS = 8;
 
-module.exports = { ENEMIES, ITEMS, TITLES, START };
+// Quem começa agora já sai com uma faca e 2 kits.
+const START = { lvl: 1, xp: 0, hp: 100, cash: 120, weapon: 'faca', armor: '', kits: 2, wins: 0, losses: 0, biz: [], collectAt: 0 };
+
+module.exports = { ENEMIES, ITEMS, TITLES, START, BUSINESSES, BIZ_CAP_HOURS };

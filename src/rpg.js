@@ -16,7 +16,7 @@ const commands = [
 const NAMES = new Set(commands.map((c) => c.name));
 
 /* ---------- conteúdo (vem de rpgdata.js: é lá que você amplia o jogo) ---------- */
-const { ENEMIES, ITEMS, TITLES, START } = require('./rpgdata');
+const { ENEMIES, ITEMS, TITLES, START, BUSINESSES, BIZ_CAP_HOURS } = require('./rpgdata');
 const byAtk = Object.values(ITEMS).filter((x) => x.kind === 'weapon').sort((x, y) => x.atk - y.atk);
 const byDef = Object.values(ITEMS).filter((x) => x.kind === 'armor').sort((x, y) => x.def - y.def);
 const WEAPONS = [{ id: '', name: 'Punhos', atk: 0, price: 0, emoji: '👊' }, ...byAtk];
@@ -37,7 +37,8 @@ const kitHeal = (p) => Math.max(KIT.flat, Math.round(maxHp(p) * KIT.heal));
 
 function player(guildId, userId) {
   const g = (db.data.rpg[guildId] ??= {});
-  const p = (g[userId] ??= { ...START, tick: Date.now() });
+  const p = (g[userId] ??= { ...START, biz: [], tick: Date.now() });
+  if (!Array.isArray(p.biz)) { p.biz = []; p.collectAt = 0; }
   // regeneração passiva: 2% da vida máxima por minuto
   const now = Date.now();
   const mins = (now - (p.tick || now)) / 60000;
@@ -71,7 +72,7 @@ function simulate(p, e) {
     ph -= d2;
     log.push('🗡️ Você causou **' + d1 + '** • ' + e.emoji + ' causou **' + d2 + '**');
   }
-  return { won: eh <= 0 && ph > 0, ph: Math.max(0, ph), log };
+  return { won: eh <= 0 && ph > 0, ph: Math.max(0, ph), eh: Math.max(0, eh), log };
 }
 
 /* ---------- telas ---------- */
@@ -98,6 +99,7 @@ function menuRow(uid) {
     new ButtonBuilder().setCustomId('rpg:fight:' + uid).setLabel('Lutar').setEmoji('⚔️').setStyle(ButtonStyle.Danger),
     new ButtonBuilder().setCustomId('rpg:kit:' + uid).setLabel('Usar kit').setEmoji('💊').setStyle(ButtonStyle.Success),
     new ButtonBuilder().setCustomId('rpg:shop:' + uid).setLabel('Loja').setEmoji('🛒').setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId('rpg:biz:' + uid).setLabel('Negócios').setEmoji('🏢').setStyle(ButtonStyle.Primary),
     new ButtonBuilder().setCustomId('rpg:menu:' + uid).setLabel('Perfil').setEmoji('🪪').setStyle(ButtonStyle.Secondary));
 }
 
@@ -117,21 +119,66 @@ function shopView(p, uid, note) {
   return { embeds: [embed], components: [row(WEAPONS, wIdx, 'w'), row(ARMORS, aIdx, 'a'), last] };
 }
 
+/* ---------- negócios (renda por hora) ---------- */
+const incomePerHour = (p) => BUSINESSES.filter((b) => p.biz.includes(b.id)).reduce((s, b) => s + b.income, 0);
+function pending(p) {
+  if (!p.biz.length || !p.collectAt) return 0;
+  const hours = Math.min(BIZ_CAP_HOURS, (Date.now() - p.collectAt) / 3600000);
+  return Math.floor(incomePerHour(p) * hours);
+}
+function collect(p) {
+  const n = pending(p);
+  p.cash += n;
+  p.collectAt = Date.now();
+  db.save();
+  return n;
+}
+
+function bizView(p, uid, note) {
+  const list = BUSINESSES.map((b) => (p.biz.includes(b.id) ? '✅ ' : '') + b.emoji + ' **' + b.name + '** — rende ' + money(b.income) + '/h — ' + (p.biz.includes(b.id) ? 'seu' : money(b.price))).join('\n');
+  const embed = new EmbedBuilder().setColor(0x9b59b6).setTitle('🏢 Seus negócios')
+    .setDescription((note ? note + '\n\n' : '') + '💵 Você tem **' + money(p.cash) + '**\n\n' + list +
+      '\n\n💰 Para coletar: **' + money(pending(p)) + '**\n📈 Renda: **' + money(incomePerHour(p)) + '/h** (acumula até ' + BIZ_CAP_HOURS + 'h, depois pára — colete sempre!)');
+  const buys = new ActionRowBuilder().addComponents(BUSINESSES.map((b) =>
+    new ButtonBuilder().setCustomId('rpg:buyb:' + uid + ':' + b.id).setLabel(b.name.split(' ')[0].slice(0, 20)).setEmoji(b.emoji)
+      .setStyle(ButtonStyle.Secondary).setDisabled(p.biz.includes(b.id))));
+  const last = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId('rpg:collect:' + uid).setLabel('Coletar').setEmoji('💰').setStyle(ButtonStyle.Success),
+    new ButtonBuilder().setCustomId('rpg:menu:' + uid).setLabel('Voltar').setEmoji('↩️').setStyle(ButtonStyle.Secondary));
+  return { embeds: [embed], components: [buys, last] };
+}
+
+function buyBiz(p, id) {
+  const b = BUSINESSES.find((x) => x.id === id);
+  if (!b) return '⚠️ Negócio inválido.';
+  if (p.biz.includes(b.id)) return '✅ Esse negócio já é seu.';
+  if (p.cash < b.price) return '💸 Faltam **' + money(b.price - p.cash) + '** para comprar ' + b.name + '.';
+  const got = collect(p); // acerta o que já rendeu antes de mudar a renda
+  p.cash -= b.price;
+  p.biz.push(b.id);
+  if (!p.collectAt) p.collectAt = Date.now();
+  db.save();
+  return '🏢 Você comprou **' + b.emoji + ' ' + b.name + '**!' + (got ? ' (+' + money(got) + ' coletados)' : '');
+}
+
 /* ---------- ações ---------- */
-function fight(p, uid, user) {
+function fight(p, uid) {
   const left = (fightCd.get(uid) || 0) - Date.now();
   if (left > 0) return { text: '⏳ Respire um pouco: espere **' + Math.ceil(left / 1000) + 's** para a próxima luta.' };
   if (p.hp < Math.ceil(maxHp(p) * 0.2)) return { text: '🩸 Você está ferido demais para lutar. Use um 💊 kit ou espere sua vida voltar.' };
   fightCd.set(uid, Date.now() + 12000);
   const e = pickEnemy(p.lvl);
+  const hpBefore = p.hp;
   const r = simulate(p, e);
-  const lines = r.log.slice(-6).join('\n');
   p.hp = r.won ? r.ph : Math.max(1, Math.round(maxHp(p) * 0.15));
+  const rounds = r.log.length;
+  const sum = '⚔️ ' + rounds + ' rodada(s) • ❤️ você: ' + hpBefore + ' → ' + (r.won ? r.ph : 0) + ' • ' + e.emoji + ' rival: ' + bar(r.won ? 0 : r.eh, e.hp, 8);
   let text;
+  let won = r.won;
   if (r.won) {
     const cash = rand(e.cash[0], e.cash[1]);
     p.cash += cash; p.xp += e.xp; p.wins++;
-    text = (e.boss ? '👑 **O Chefão em pessoa!** ' : '') + e.emoji + ' Você enfrentou **' + e.name + '**.\n' + lines + '\n\n🏆 **Vitória!** +' + money(cash) + ' • +' + e.xp + ' XP';
+    text = (e.boss ? '👑 **O Chefão em pessoa!** ' : '') + e.emoji + ' **' + e.name + '** foi derrubado!\n' + sum + '\n🏆 **Vitória!** +' + money(cash) + ' • +' + e.xp + ' XP';
     while (p.xp >= xpNeeded(p.lvl)) {
       p.xp -= xpNeeded(p.lvl);
       p.lvl++;
@@ -141,10 +188,10 @@ function fight(p, uid, user) {
   } else {
     const lost = Math.floor(p.cash * 0.1);
     p.cash -= lost; p.losses++;
-    text = e.emoji + ' Você enfrentou **' + e.name + '**.\n' + lines + '\n\n💀 **Derrota!** Perdeu ' + money(lost) + ' e saiu bem ferido.';
+    text = e.emoji + ' **' + e.name + '** foi mais forte.\n' + sum + '\n💀 **Derrota!** Perdeu ' + money(lost) + '. Dica: compre arma/proteção na 🛒 Loja ou use um kit antes de lutar.';
   }
   db.save();
-  return { text };
+  return { text, won };
 }
 
 function useKit(p) {
@@ -189,14 +236,28 @@ async function handleButton(i) {
   const [, action, uid, extra] = i.customId.split(':');
   if (i.user.id !== uid) return i.reply({ content: 'Esse menu é de outra pessoa. Use /aventura para abrir o seu.', flags: EPHEMERAL });
   const p = player(i.guild.id, uid);
-  const back = (extraText) => i.update({ embeds: [profileEmbed(p, i.user, extraText)], components: [menuRow(uid)] });
+  const back = (extraText, color) => {
+    const embeds = [];
+    if (extraText && color) embeds.push(new EmbedBuilder().setColor(color).setDescription(extraText));
+    embeds.push(profileEmbed(p, i.user, color ? '' : extraText));
+    return i.update({ embeds, components: [menuRow(uid)] });
+  };
   switch (action) {
     case 'menu': return back();
-    case 'fight': return back(fight(p, uid, i.user).text);
+    case 'fight': { const f = fight(p, uid); return back(f.text, f.won === undefined ? 0x808080 : f.won ? 0x23a55a : 0xda373c); }
     case 'kit': return back(useKit(p));
     case 'shop': return i.update(shopView(p, uid));
     case 'buyw': return i.update(shopView(p, uid, buy(p, WEAPONS, extra, 'weapon')));
     case 'buya': return i.update(shopView(p, uid, buy(p, ARMORS, extra, 'armor')));
+    case 'biz': return i.update(bizView(p, uid));
+    case 'collect': {
+      const n = pending(p);
+      if (!p.biz.length) return i.update(bizView(p, uid, '🏢 Você ainda não tem negócios. Compre o primeiro!'));
+      if (n < 1) return i.update(bizView(p, uid, '⏳ Ainda não rendeu nada para coletar.'));
+      collect(p);
+      return i.update(bizView(p, uid, '💰 Você coletou **' + money(n) + '**!'));
+    }
+    case 'buyb': return i.update(bizView(p, uid, buyBiz(p, extra)));
     case 'buykit': {
       if (p.cash < KIT.price) return i.update(shopView(p, uid, '💸 Faltam ' + money(KIT.price - p.cash) + ' para um kit.'));
       p.cash -= KIT.price; p.kits++; db.save();
@@ -205,4 +266,4 @@ async function handleButton(i) {
   }
 }
 
-module.exports = { commands, handleSlash, handleButton, _t: { pickEnemy, simulate, player, atkOf, defOf, maxHp, WEAPONS, ARMORS, xpNeeded, fight, buy, useKit, fightCd } };
+module.exports = { commands, handleSlash, handleButton, _t: { pickEnemy, simulate, player, atkOf, defOf, maxHp, WEAPONS, ARMORS, xpNeeded, fight, buy, useKit, fightCd, buyBiz, collect, pending, incomePerHour } };
