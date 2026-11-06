@@ -133,6 +133,7 @@ function defaults() {
       cooldown: 60,
       multiplier: 1,
       announce: 'channel', // 'same' | 'channel' | 'off'
+      announceStyle: 'text', // 'text' | 'card'
       channelId: '',
       message: '🎉 {user} subiu para o **nível {level}**!',
       ignoredChannels: [],
@@ -447,6 +448,7 @@ function sanitize(input, old) {
     cooldown: int(l.cooldown, 0, 3600, d.levels.cooldown),
     multiplier: flt(l.multiplier, 0.1, 10, 1),
     announce: oneOf(l.announce, ['same', 'channel', 'off'], d.levels.announce),
+    announceStyle: oneOf(l.announceStyle, ['text', 'card'], 'text'),
     channelId: sid(l.channelId),
     message: str(l.message, 500, d.levels.message),
     ignoredChannels: idList(l.ignoredChannels, 50),
