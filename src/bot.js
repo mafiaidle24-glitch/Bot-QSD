@@ -14,6 +14,7 @@ const { translate, LANGS, FLAGS, baseLang, flagLang, langName } = require('./tra
 const { JOKES, FACTS, QUIZ, EIGHT_BALL } = require('./content');
 const tickets = require('./tickets');
 const logs = require('./logs');
+const moderation = require('./moderation');
 
 const EPHEMERAL = MessageFlags.Ephemeral;
 const BASE_URL = (process.env.BASE_URL || 'http://localhost:3000').replace(/\/$/, '');
@@ -512,6 +513,7 @@ async function handleXp(msg, cfg) {
 client.on(Events.MessageCreate, async (msg) => {
   if (!msg.guild || msg.author.bot || msg.webhookId) return;
   const cfg = cfgs.getConfig(msg.guild.id);
+  try { if (await moderation.automod(msg, cfg)) return; } catch (e) { warn('automod', e); }
   try { if (await wiki.handleMessage(msg)) return; } catch (e) { warn('wiki', e); }
   try { if (await handleCustomCommand(msg, cfg)) return; } catch (e) { warn('comando personalizado', e); }
   try { await handleGuess(msg); } catch (e) { warn('jogo de adivinhar', e); }
@@ -655,6 +657,7 @@ const slashCommands = [
   new SlashCommandBuilder().setName('painel').setDescription('Link do painel de configuração do bot'),
   new SlashCommandBuilder().setName('ticket').setDescription('Publica o painel de tickets neste canal (somente administradores)')
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+  ...moderation.commands,
 ].map((c) => c.setDMPermission(false).toJSON());
 
 async function registerCommands(guild) {
@@ -668,6 +671,7 @@ async function registerCommands(guild) {
 
 async function runSlash(i) {
   const cfg = cfgs.getConfig(i.guild.id);
+  if (await moderation.handleSlash(i, cfg)) return;
   switch (i.commandName) {
     case 'rank': {
       if (!cfg.levels.enabled) return i.reply({ content: 'O sistema de níveis está desativado.', flags: EPHEMERAL });
