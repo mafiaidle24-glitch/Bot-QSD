@@ -806,6 +806,7 @@ client.on(Events.InteractionCreate, async (i) => {
   try {
     if (!i.guild) return;
     if (i.isChatInputCommand()) return await runSlash(i);
+    if (i.isStringSelectMenu() && i.customId.startsWith('rpg:')) return await rpg.handleSelect(i);
     if (i.isButton()) {
       if (i.customId.startsWith('rp:')) return await handleRoleButton(i);
       if (i.customId.startsWith('quiz:')) return await handleQuizButton(i);
