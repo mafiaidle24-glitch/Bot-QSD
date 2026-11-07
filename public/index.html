@@ -275,7 +275,7 @@ function msgPreview(text, imgEl) {
 const TABS = [
   ['home', '🏠 Início'], ['welcome', '👋 Boas-vindas'], ['leave', '🚪 Saída'], ['roles', '🎛️ Cargos / Botões'], ['messages', '📨 Mensagens / Embeds'], ['wiki', '📖 Wiki de Capos'], ['tickets', '🎫 Tickets'], ['autoroles', '🏷️ Autoroles'], ['moderation', '🔨 Moderação'], ['logs', '📜 Logs'],
   ['levels', '⭐ Rank / Níveis'], ['commands', '⌨️ Comandos'], ['interaction', '💬 Interação'],
-  ['translate', '🌐 Tradução'], ['games', '🎮 Mini jogos'], ['identity', '🎭 Identidade'], ['premium', '💎 Premium'],
+  ['translate', '🌐 Tradução'], ['games', '🎮 Mini jogos'], ['identity', '🎭 Identidade'], ['expressions', '😀 Emojis / Figurinhas'], ['premium', '💎 Premium'],
 ];
 
 function tabHome() {
@@ -1203,7 +1203,42 @@ function tabWiki() {
   return box;
 }
 
-const TAB_FN = { home: tabHome, messages: tabMessages, wiki: tabWiki, tickets: tabTickets, autoroles: tabAutoroles, moderation: tabModeration, logs: tabLogs, welcome: () => tabCard('welcome'), leave: () => tabCard('leave'), roles: tabRoles, levels: tabLevels, commands: tabCommands, interaction: tabInteraction, translate: tabTranslate, games: tabGames, identity: tabIdentity, premium: tabPremium };
+/* ---------- Emojis e figurinhas do servidor ---------- */
+function tabExpressions() {
+  const log = h('div');
+  const pick = (type) => {
+    const f = h('input', { type: 'file', accept: 'image/png,image/jpeg,image/gif,image/webp', multiple: true, style: 'display:none' });
+    f.addEventListener('change', async () => {
+      const list = Array.from(f.files || []);
+      let ok = 0; const fails = [];
+      for (let i = 0; i < list.length; i++) {
+        log.replaceChildren(h('p', {}, '⏳ Enviando ' + (i + 1) + ' de ' + list.length + '…'));
+        try {
+          if (list[i].size > 8 * 1024 * 1024) throw new Error('arquivo grande demais');
+          const r = await fetch('/api/guilds/' + st.gid + '/expressions/' + type, { method: 'POST', credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/octet-stream' }, body: await list[i].arrayBuffer() });
+          const j = await r.json().catch(() => ({}));
+          if (!r.ok) throw new Error(j.error || 'Erro ' + r.status);
+          ok++;
+        } catch (e) {
+          fails.push(list[i].name + ': ' + e.message);
+          if (/^Limite|^O bot precisa/.test(e.message)) break;
+        }
+      }
+      log.replaceChildren(
+        h('p', {}, '✅ ' + ok + ' criado(s) de ' + list.length + '.'),
+        fails.map((x) => h('p', { style: 'color:#ff8a8a' }, '⚠️ ' + x)));
+    });
+    f.click();
+  };
+  return card('😀 Emojis e figurinhas do servidor', 'Escolha várias imagens: o bot cria tudo no seu servidor, nomeando qsd_01, qsd_02… em ordem. GIF vira animado.',
+    h('div', { class: 'dbtns' },
+      h('button', { class: 'btn', onclick: () => pick('emoji') }, '😀 Importar emojis'),
+      h('button', { class: 'btn', onclick: () => pick('sticker') }, '🖼️ Importar figurinhas')),
+    log);
+}
+
+const TAB_FN = { home: tabHome, messages: tabMessages, wiki: tabWiki, tickets: tabTickets, autoroles: tabAutoroles, moderation: tabModeration, logs: tabLogs, welcome: () => tabCard('welcome'), leave: () => tabCard('leave'), roles: tabRoles, levels: tabLevels, commands: tabCommands, interaction: tabInteraction, translate: tabTranslate, games: tabGames, identity: tabIdentity, expressions: tabExpressions, premium: tabPremium };
 
 /* ---------- salvar / carregar ---------- */
 async function save() {
