@@ -18,6 +18,7 @@ const moderation = require('./moderation');
 const minigames = require('./minigames');
 const rpg = require('./rpg');
 const premium = require('./premium');
+const identity = require('./identity');
 
 const EPHEMERAL = MessageFlags.Ephemeral;
 const BASE_URL = (process.env.BASE_URL || 'http://localhost:3000').replace(/\/$/, '');
@@ -843,6 +844,8 @@ client.once(Events.ClientReady, async () => {
   log('Online como ' + client.user.tag + ' em ' + client.guilds.cache.size + ' servidor(es).');
   client.user.setActivity('/rank • /quiz • /piada');
   premium.init(client);
+  setTimeout(() => identity.sweep(client), 20_000);
+  setInterval(() => identity.sweep(client), 10 * 60_000).unref?.();
   for (const guild of client.guilds.cache.values()) await registerCommands(guild);
 
   // ===== Atualiza o banner do bot =====

@@ -2,6 +2,8 @@
 const fs = require('fs');
 const uploads = require('./uploads');
 const cfgs = require('./config');
+const premium = require('./premium');
+const db = require('./db');
 
 const MIME = { '.png': 'image/png', '.jpg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp' };
 const MAX_IMG = 8 * 1024 * 1024;
@@ -36,6 +38,7 @@ async function apply(client, guildId, { reset = false } = {}) {
     out.errors.push('Apelido: ' + explain(e));
   }
 
+  if (reset) db.data.premium.identity[guildId] = false;
   const body = {};
   try {
     body.avatar = reset ? null : dataUri(guildId, id.avatar);
@@ -49,6 +52,7 @@ async function apply(client, guildId, { reset = false } = {}) {
     try {
       await client.rest.patch(base, { body: { [k]: body[k] } });
       out.ok.push(k === 'avatar' ? 'foto' : k === 'banner' ? 'banner' : 'bio');
+      if (!reset) db.data.premium.identity[guildId] = true;
     } catch (e) {
       out.errors.push((k === 'avatar' ? 'Foto' : k === 'banner' ? 'Banner' : 'Bio') + ': ' + explain(e));
     }
@@ -56,4 +60,23 @@ async function apply(client, guildId, { reset = false } = {}) {
   return out;
 }
 
-module.exports = { apply };
+const has = (id) => !!(id.nick || id.avatar || id.banner || id.bio);
+
+/** Servidores que perderam (ou nunca tiveram) o Premium voltam ao visual padrão do bot. */
+let sweeping = false;
+async function sweep(client) {
+  if (sweeping) return;
+  sweeping = true;
+  try {
+    for (const g of client.guilds.cache.values()) {
+      if (premium.perks(g.id).identity) continue;
+      const done = db.data.premium.identity[g.id] === false;
+      if (done || !has(cfgs.getConfig(g.id).identity)) continue; // já limpo ou nunca personalizou
+      const r = await apply(client, g.id, { reset: true });
+      if (!r.errors.length) { db.data.premium.identity[g.id] = false; db.save(); console.log('[identidade] ' + g.name + ': sem Premium, voltou ao padrão.'); }
+      else console.warn('[identidade] ' + g.name + ': ' + r.errors.join(' | '));
+    }
+  } catch (e) { console.warn('[identidade] varredura:', e.message); } finally { sweeping = false; }
+}
+
+module.exports = { apply, sweep };
