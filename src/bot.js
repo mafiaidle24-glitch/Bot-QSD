@@ -17,6 +17,7 @@ const logs = require('./logs');
 const moderation = require('./moderation');
 const minigames = require('./minigames');
 const rpg = require('./rpg');
+const premium = require('./premium');
 
 const EPHEMERAL = MessageFlags.Ephemeral;
 const BASE_URL = (process.env.BASE_URL || 'http://localhost:3000').replace(/\/$/, '');
@@ -110,6 +111,7 @@ async function applyRewards(guild, member, level, cfg) {
 async function giveXp(guild, member, amount, channel) {
   const cfg = cfgs.getConfig(guild.id).levels;
   if (!cfg.enabled || amount <= 0) return;
+  amount = Math.max(1, Math.round(amount * premium.perks(guild.id).chatXp));
   const u = db.getUser(guild.id, member.id);
   const before = levelInfo(u.xp).level;
   u.xp += amount;
@@ -125,7 +127,7 @@ async function giveXp(guild, member, amount, channel) {
   if (!target?.isTextBased()) return;
   const text = fmt(cfg.message, { member, guild, level: after });
   const payload = { content: text || undefined, allowedMentions: { users: [member.id] } };
-  if (cfg.announceStyle === 'card') {
+  if (cfg.announceStyle === 'card' && premium.perks(guild.id).levelCard) {
     try {
       const info = levelInfo(u.xp);
       const buf = await renderRank({
@@ -681,6 +683,7 @@ const slashCommands = [
   ...moderation.commands,
   ...minigames.commands,
   ...rpg.commands,
+  ...premium.commands,
 ].map((c) => c.setDMPermission(false).toJSON());
 
 async function registerCommands(guild) {
@@ -697,6 +700,7 @@ async function runSlash(i) {
   if (await moderation.handleSlash(i, cfg)) return;
   if (await minigames.handleSlash(i, { gameAllowed, reward })) return;
   if (await rpg.handleSlash(i, { gameAllowed })) return;
+  if (await premium.handleSlash(i)) return;
   switch (i.commandName) {
     case 'rank': {
       if (!cfg.levels.enabled) return i.reply({ content: 'O sistema de níveis está desativado.', flags: EPHEMERAL });
@@ -813,6 +817,7 @@ client.on(Events.InteractionCreate, async (i) => {
       if (i.customId.startsWith('ppt:')) return await handlePptButton(i);
       if (i.customId.startsWith('tk:')) return await tickets.handleButton(i);
       if (i.customId.startsWith('rpg:')) return await rpg.handleButton(i);
+      if (i.customId.startsWith('pm:')) return await premium.handleButton(i);
     }
   } catch (e) {
     warn('interação', e);
@@ -825,6 +830,7 @@ client.on(Events.InteractionCreate, async (i) => {
 client.once(Events.ClientReady, async () => {
   log('Online como ' + client.user.tag + ' em ' + client.guilds.cache.size + ' servidor(es).');
   client.user.setActivity('/rank • /quiz • /piada');
+  premium.init(client);
   for (const guild of client.guilds.cache.values()) await registerCommands(guild);
 
   // ===== Atualiza o banner do bot =====

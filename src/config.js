@@ -1,6 +1,7 @@
 // Configuração por servidor: valores padrão, validação e cache.
 const crypto = require('crypto');
 const db = require('./db');
+const premium = require('./premium');
 
 const ID = /^\d{15,25}$/;
 const HEX = /^#[0-9a-fA-F]{6}$/;
@@ -539,8 +540,21 @@ function getConfig(guildId) {
   return c;
 }
 
+/** Aplica os limites do plano grátis. Devolve avisos do que foi cortado. */
+function applyLimits(guildId, clean) {
+  const pk = premium.perks(guildId);
+  const notes = [];
+  const types = clean.tickets?.panel?.types;
+  if (types && types.length > pk.ticketTypes) { types.length = pk.ticketTypes; notes.push('Tickets: o plano grátis permite ' + pk.ticketTypes + ' tipos (os extras não foram salvos).'); }
+  const words = clean.moderation?.automod?.words?.list;
+  if (words && words.length > pk.words) { words.length = pk.words; notes.push('Automod: o plano grátis permite ' + pk.words + ' palavras proibidas (as extras não foram salvas).'); }
+  if (clean.levels && clean.levels.announceStyle === 'card' && !pk.levelCard) { clean.levels.announceStyle = 'text'; notes.push('O cartão no aviso de nível é um recurso Premium.'); }
+  return notes;
+}
+
 function setConfig(guildId, input) {
   const clean = sanitize(input, getConfig(guildId));
+  setConfig.notes = applyLimits(guildId, clean);
   db.data.guilds[guildId] = clean;
   cache.set(guildId, clean);
   db.save();
