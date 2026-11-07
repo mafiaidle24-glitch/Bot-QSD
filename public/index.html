@@ -281,20 +281,35 @@ const TABS = [
 function tabHome() {
   return h('div', {},
     !st.data.botCanManageRoles ? h('div', { class: 'warn' }, '⚠️ O bot não tem a permissão ', h('b', {}, 'Gerenciar Cargos'), ' neste servidor. Os botões de cargo e as recompensas de nível não vão funcionar até você dar essa permissão (e deixar o cargo do bot acima dos cargos que ele vai entregar).') : null,
-    card('Como usar', 'Escolha uma aba acima, ajuste e clique em "Salvar alterações" (barra que aparece embaixo).',
+    card('Como usar', 'Escolha uma aba acima, ajuste e clique em "Salvar alterações" (barra que aparece embaixo). 💎 = recurso com limite no plano grátis ou exclusivo do Premium.',
       h('ul', { class: 'cl' },
-        h('li', {}, '👋 ', h('b', {}, 'Boas-vindas / Saída'), ': mensagem + imagem com a foto do membro, igual ao seu modelo.'),
-        h('li', {}, '🎛️ ', h('b', {}, 'Cargos / Botões'), ': monte painéis com botões coloridos e publique no canal.'),
-        h('li', {}, '📨 ', h('b', {}, 'Mensagens / Embeds'), ': monte avisos e regras com cores, imagens e campos e publique em um canal.'),
-        h('li', {}, '⭐ ', h('b', {}, 'Rank / Níveis'), ': XP por mensagem, anúncio de nível e cargos de recompensa.'),
-        h('li', {}, '⌨️ ', h('b', {}, 'Comandos'), ': crie comandos como ', h('code', {}, '!regras'), ' sem programar.'),
-        h('li', {}, '💬 ', h('b', {}, 'Interação'), ': respostas e reações automáticas a palavras.'),
-        h('li', {}, '🌐 ', h('b', {}, 'Tradução'), ': traduz canais automaticamente e por reação de bandeira.'),
-        h('li', {}, '🎮 ', h('b', {}, 'Mini jogos'), ': quiz, pedra-papel-tesoura, adivinhar número e mais.'))),
-    card('Comandos de barra do bot', null,
-      h('ul', { class: 'cl' },
-        ['/rank', '/top', '/traduzir', '/dado', '/moeda', '/ppt', '/quiz', '/adivinhar', '/piada', '/fato', '/abracar', '/bola8', '/painel']
-          .map((c) => h('li', {}, h('code', {}, c))))),
+        h('li', {}, '👋 ', h('b', {}, 'Boas-vindas / Saída'), ': mensagem de texto e, no Premium, cartão com a foto do membro. 💎'),
+        h('li', {}, '🎛️ ', h('b', {}, 'Cargos / Botões'), ': painéis com botões coloridos para o membro pegar cargos. 💎'),
+        h('li', {}, '📨 ', h('b', {}, 'Mensagens / Embeds'), ': avisos e regras com cores, imagens e campos, publicados em um canal. 💎'),
+        h('li', {}, '📖 ', h('b', {}, 'Wiki de Capos'), ': fichas de personagens que o bot envia ao digitar ', h('code', {}, '!nome'), '. 💎'),
+        h('li', {}, '🎫 ', h('b', {}, 'Tickets'), ': atendimento privado com tipos, equipe, log e transcrição. 💎'),
+        h('li', {}, '🏷️ ', h('b', {}, 'Autoroles'), ': cargo automático para quem entra (visitante) e para bots. 💎 Premium'),
+        h('li', {}, '🔨 ', h('b', {}, 'Moderação'), ': automod (spam, convites, links, palavras) e punição por avisos. 💎 Premium'),
+        h('li', {}, '📜 ', h('b', {}, 'Logs'), ': registra mensagens, entradas, cargos, bans e canais num canal da equipe. 💎 Premium'),
+        h('li', {}, '⭐ ', h('b', {}, 'Rank / Níveis'), ': XP por mensagem, avisos de nível e cargos de recompensa. 💎'),
+        h('li', {}, '⌨️ ', h('b', {}, 'Comandos'), ': crie comandos como ', h('code', {}, '!regras'), ' sem programar. 💎'),
+        h('li', {}, '💬 ', h('b', {}, 'Interação'), ': respostas e reações automáticas a palavras. 💎'),
+        h('li', {}, '🌐 ', h('b', {}, 'Tradução'), ': traduz canais automaticamente e por reação de bandeira. 💎'),
+        h('li', {}, '🎮 ', h('b', {}, 'Mini jogos'), ': quiz, adivinhar, rali, ship, RPG da máfia e mais. 💎'),
+        h('li', {}, '😀 ', h('b', {}, 'Emojis / Figurinhas'), ': envie várias imagens de uma vez e o bot cria os emojis e figurinhas no servidor (qsd_01, qsd_02…).'),
+        h('li', {}, '🎭 ', h('b', {}, 'Identidade'), ': nome, foto, banner e bio do bot só no seu servidor. 💎 Premium'),
+        h('li', {}, '💎 ', h('b', {}, 'Premium'), ': veja o plano, a validade e o que cada recurso libera.'))),
+    card('Comandos de barra do bot', 'Digite / no chat do Discord para ver todos.',
+      ...[
+        ['⭐ Níveis', [['/rank', 'seu cartão de nível'], ['/top', 'ranking do servidor']]],
+        ['🎮 Diversão', [['/quiz', 'pergunta relâmpago'], ['/adivinhar', 'número secreto (fácil, normal, difícil)'], ['/rali', 'rali de palavras'], ['/ship', 'compatibilidade entre dois membros'], ['/ppt', 'pedra, papel e tesoura'], ['/dado', '/moeda', '/bola8', '/piada', '/fato', '/abracar']]],
+        ['🕴️ RPG da máfia', [['/aventura', 'lutar, loja, negócios, classes e missões'], ['/aventuraranking', 'maiores mafiosos'], ['/duelo', 'duelo com aposta 💎'], ['/chefe', 'chefão semanal 💎']]],
+        ['🔨 Moderação (equipe) 💎', [['/limpar', '/avisar', '/avisos', '/limparavisos', '/silenciar', '/tirarsilencio', '/expulsar', '/banir', '/desbanir']]],
+        ['🌐 Utilidades', [['/traduzir', 'traduz um texto'], ['/ticket', 'publica o painel de tickets'], ['/painel', 'link deste painel'], ['/premium', 'plano Premium do servidor']]],
+      ].map(([title, cmds]) => h('div', { style: 'margin-bottom:10px' },
+        h('b', {}, title),
+        h('ul', { class: 'cl' }, cmds.map((c) => c.length === 1 || (c.length > 2) ? null : h('li', {}, h('code', {}, c[0]), c[1] ? ' ' + c[1] : '')),
+          cmds.filter((c) => c.length > 2).map((c) => h('li', {}, c.map((x, i) => [i ? ' ' : '', h('code', {}, x)]).flat())))))),
     card('Variáveis para mensagens', null,
       h('p', {}, h('code', {}, '{user}'), ' menciona o membro • ', h('code', {}, '{username}'), ' nome • ', h('code', {}, '{server}'), ' nome do servidor • ',
         h('code', {}, '{count}'), ' nº de membros • ', h('code', {}, '{level}'), ' nível (só em níveis) • ', h('code', {}, '{args}'), ' texto depois do comando • ',
@@ -440,7 +455,7 @@ function tabModeration() {
   const userOpts = (st.data.members || []).map((u) => ({ v: u.id, t: '👤 ' + u.name + (me && me.id === u.id ? ' (você)' : '') }));
   if (me && me.id && !userOpts.some((x) => x.v === me.id)) userOpts.unshift({ v: me.id, t: '👤 Minha conta (' + (me.username || 'eu') + ')' });
   return h('div', {},
-    card('🔨 Equipe e punições', 'Donos, administradores e os cargos abaixo podem usar os comandos de moderação. Comandos: /avisar, /avisos, /limparavisos, /silenciar, /tirarsilencio, /expulsar, /banir e /desbanir.',
+    card('🔨 Equipe e punições', 'Donos, administradores e os cargos abaixo podem usar os comandos de moderação. Comandos: /limpar (apaga várias mensagens), /avisar, /avisos, /limparavisos, /silenciar, /tirarsilencio, /expulsar, /banir e /desbanir.',
       field('Cargos da equipe de moderação', multi(m, 'staffRoleIds', roleOpts(), { label: 'adicionar cargo…' }), 'O bot precisa das permissões: Silenciar membros, Expulsar, Banir e Gerenciar mensagens, e o cargo dele acima dos membros.'),
       chk(m, 'dmUser', 'Avisar o membro por mensagem privada quando for punido'),
       h('div', { class: 'row' },
@@ -1206,6 +1221,28 @@ function tabWiki() {
 /* ---------- Emojis e figurinhas do servidor ---------- */
 function tabExpressions() {
   const log = h('div');
+  const gallery = h('div', { style: 'margin-top:14px' });
+  const item = (type, x) => h('div', { style: 'display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--line,#2a2d33)' },
+    hideOnError(h('img', { src: x.url, alt: '', style: 'width:' + (type === 'sticker' ? '56px' : '36px') + ';height:' + (type === 'sticker' ? '56px' : '36px') + ';object-fit:contain;border-radius:6px;background:#1d1f24' })),
+    h('span', { style: 'flex:1' }, h('code', {}, x.name), x.animated ? ' (animado)' : ''),
+    h('button', { class: 'btn danger small', onclick: async () => {
+      if (!confirm('Apagar ' + x.name + ' do servidor? Isso não pode ser desfeito.')) return;
+      try { await api('/api/guilds/' + st.gid + '/expressions/' + type + '/' + x.id, { method: 'DELETE' }); toast(x.name + ' apagado.', 'ok'); loadList(); }
+      catch (e) { toast(e.message, 'err'); }
+    } }, '🗑️ Apagar'));
+  async function loadList() {
+    gallery.replaceChildren(h('p', { style: 'color:var(--muted)' }, '⏳ Carregando…'));
+    try {
+      const d = await api('/api/guilds/' + st.gid + '/expressions');
+      gallery.replaceChildren(
+        h('h4', {}, '😀 Emojis do painel (' + d.emojis.length + ')'),
+        d.emojis.length ? d.emojis.map((x) => item('emoji', x)) : h('p', { style: 'color:var(--muted)' }, 'Nenhum ainda.'),
+        h('h4', { style: 'margin-top:14px' }, '🖼️ Figurinhas do painel (' + d.stickers.length + ')'),
+        d.stickers.length ? d.stickers.map((x) => item('sticker', x)) : h('p', { style: 'color:var(--muted)' }, 'Nenhuma ainda.'),
+        h('p', { class: 'sub', style: 'margin-top:10px' }, 'Aqui aparecem só os itens criados pelo painel (qsd_01, qsd_02…). Os outros emojis do servidor não são mexidos.'));
+    } catch (e) { gallery.replaceChildren(h('p', { style: 'color:#ff8a8a' }, '⚠️ ' + e.message)); }
+  }
+  setTimeout(loadList, 0);
   const pick = (type) => {
     const f = h('input', { type: 'file', accept: 'image/png,image/jpeg,image/gif,image/webp', multiple: true, style: 'display:none' });
     f.addEventListener('change', async () => {
@@ -1228,6 +1265,7 @@ function tabExpressions() {
       log.replaceChildren(
         h('p', {}, '✅ ' + ok + ' criado(s) de ' + list.length + '.'),
         fails.map((x) => h('p', { style: 'color:#ff8a8a' }, '⚠️ ' + x)));
+      loadList();
     });
     f.click();
   };
@@ -1235,7 +1273,7 @@ function tabExpressions() {
     h('div', { class: 'dbtns' },
       h('button', { class: 'btn', onclick: () => pick('emoji') }, '😀 Importar emojis'),
       h('button', { class: 'btn', onclick: () => pick('sticker') }, '🖼️ Importar figurinhas')),
-    log);
+    log, gallery);
 }
 
 const TAB_FN = { home: tabHome, messages: tabMessages, wiki: tabWiki, tickets: tabTickets, autoroles: tabAutoroles, moderation: tabModeration, logs: tabLogs, welcome: () => tabCard('welcome'), leave: () => tabCard('leave'), roles: tabRoles, levels: tabLevels, commands: tabCommands, interaction: tabInteraction, translate: tabTranslate, games: tabGames, identity: tabIdentity, expressions: tabExpressions, premium: tabPremium };
