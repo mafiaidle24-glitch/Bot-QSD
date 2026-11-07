@@ -275,7 +275,7 @@ function msgPreview(text, imgEl) {
 const TABS = [
   ['home', '🏠 Início'], ['welcome', '👋 Boas-vindas'], ['leave', '🚪 Saída'], ['roles', '🎛️ Cargos / Botões'], ['messages', '📨 Mensagens / Embeds'], ['wiki', '📖 Wiki de Capos'], ['tickets', '🎫 Tickets'], ['autoroles', '🏷️ Autoroles'], ['moderation', '🔨 Moderação'], ['logs', '📜 Logs'],
   ['levels', '⭐ Rank / Níveis'], ['commands', '⌨️ Comandos'], ['interaction', '💬 Interação'],
-  ['translate', '🌐 Tradução'], ['games', '🎮 Mini jogos'], ['premium', '💎 Premium'],
+  ['translate', '🌐 Tradução'], ['games', '🎮 Mini jogos'], ['identity', '🎭 Identidade'], ['premium', '💎 Premium'],
 ];
 
 function tabHome() {
@@ -588,6 +588,7 @@ function tabNotice(tab) {
     wiki: '💎 Plano grátis: ' + (q.wikiPublishes ? q.wikiPublishes.limit : '') + ' publicação da lista por mês (' + use('wikiPublishes') + ').',
     tickets: '💎 Plano grátis: até ' + pm.limits.ticketTypes + ' tipos de ticket e sem transcrição .txt.',
     autoroles: LOCK, moderation: LOCK, logs: LOCK,
+    identity: pm.features && pm.features.identity === false ? LOCK : '',
     levels: '💎 O cartão de rank no aviso de nível é Premium.',
     commands: '💎 Plano grátis: até 5 comandos personalizados.',
     interaction: '💎 Plano grátis: até 5 respostas automáticas e 5 reações automáticas.',
@@ -595,6 +596,64 @@ function tabNotice(tab) {
     games: '💎 Plano grátis: ' + (q.gamesDay ? q.gamesDay.limit : '') + ' usos de comandos de jogo por dia (' + use('gamesDay') + '). /duelo e /chefe são Premium.',
   };
   return T[tab] ? h('div', { class: 'warn' }, T[tab]) : h('span');
+}
+
+/* ---------- Identidade do bot neste servidor ---------- */
+function filePicker(o, k, round) {
+  const box = h('div', { class: 'imgp' });
+  const draw = () => {
+    const v = o[k] || '';
+    const file = h('input', { type: 'file', accept: 'image/png,image/jpeg,image/gif,image/webp', style: 'display:none' });
+    file.addEventListener('change', async () => {
+      const f = file.files && file.files[0];
+      if (!f) return;
+      if (f.size > 8 * 1024 * 1024) { toast('Imagem muito grande (máx. 8 MB).', 'err'); return; }
+      try {
+        const r = await fetch('/api/guilds/' + st.gid + '/uploads' + (round ? '?round=1' : ''), { method: 'POST', credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/octet-stream' }, body: await f.arrayBuffer() });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(j.error || 'Erro ' + r.status);
+        o[k] = j.ref; dirty(); draw();
+        toast('Imagem enviada! Toque em "Aplicar no servidor".', 'ok');
+      } catch (e) { toast(e.message, 'err'); }
+    });
+    box.replaceChildren(
+      h('div', { class: 'ir' },
+        h('button', { class: 'btn ghost small', type: 'button', onclick: () => { file.value = ''; file.click(); } }, v ? '🔁 Trocar imagem' : '📁 Enviar do aparelho'),
+        v ? h('button', { class: 'btn danger small', type: 'button', onclick: () => { o[k] = ''; dirty(); draw(); } }, 'Limpar') : null,
+        file),
+      v ? hideOnError(h('img', { src: imgSrc(v), alt: '', style: 'max-width:' + (k === 'banner' ? '320px' : '120px') + ';border-radius:' + (k === 'avatar' ? '50%' : '8px') + ';margin-top:8px' })) : null);
+  };
+  draw();
+  return box;
+}
+
+function tabIdentity() {
+  const id = st.cfg.identity;
+  const result = h('div', { id: 'idresult', style: 'margin-top:10px' });
+  async function run(action) {
+    const show = (...kids) => { const el = $('#idresult'); if (el) el.replaceChildren(...kids.filter(Boolean)); };
+    try {
+      if (st.dirty) await save(); // salvar redesenha a aba, por isso o resultado é buscado de novo
+      show(h('p', { style: 'color:var(--muted)' }, '⏳ Aplicando no Discord…'));
+      const r = await api('/api/guilds/' + st.gid + '/identity/' + action, { method: 'POST' });
+      show(
+        r.ok.length ? h('p', {}, '✅ ' + (action === 'reset' ? 'Voltou ao padrão: ' : 'Aplicado: ') + r.ok.join(', ') + '.') : null,
+        ...r.errors.map((e) => h('p', { style: 'color:#ff8a8a' }, '⚠️ ' + e)),
+        h('p', { style: 'color:var(--muted)' }, 'No Discord pode demorar alguns segundos para atualizar (às vezes só depois de reabrir o app).'));
+    } catch (e) { show(h('p', { style: 'color:#ff8a8a' }, '⚠️ ' + e.message)); }
+  }
+  return h('div', {},
+    card('🎭 Identidade do bot neste servidor', 'Escolha como o bot aparece só no seu servidor: nome, foto, banner e bio. Em outros servidores ele continua igual.',
+      field('Nome (apelido do bot)', tInput(id, 'nick', { ph: 'ex.: Capanga do Chefe', max: 32 }), 'Até 32 caracteres. Vazio = nome padrão.'),
+      field('Foto do bot', filePicker(id, 'avatar', false), 'PNG, JPG, GIF ou WEBP, até 8 MB. Imagem quadrada fica melhor.'),
+      field('Banner do bot', filePicker(id, 'banner', false), 'Imagem larga (ex.: 600x240). Aparece no perfil do bot neste servidor.'),
+      field('Bio (sobre o bot)', tArea(id, 'bio', { rows: 3, max: 190, tools: false }), 'Até 190 caracteres.'),
+      h('div', {},
+        h('button', { class: 'btn green', onclick: () => run('apply') }, '🎭 Aplicar no servidor'), ' ',
+        h('button', { class: 'btn ghost', onclick: () => { if (confirm('Voltar o nome, a foto, o banner e a bio do bot ao padrão neste servidor?')) run('reset'); } }, 'Voltar ao padrão')),
+      result,
+      h('p', { class: 'sub', style: 'margin-top:10px' }, 'Dica: se aparecer erro de permissão no nome, dê ao bot a permissão "Alterar apelido" (ou convide de novo pelo painel). O Discord limita trocas muito seguidas de imagem; se acontecer, espere alguns minutos.')));
 }
 
 function tabPremium() {
@@ -1144,7 +1203,7 @@ function tabWiki() {
   return box;
 }
 
-const TAB_FN = { home: tabHome, messages: tabMessages, wiki: tabWiki, tickets: tabTickets, autoroles: tabAutoroles, moderation: tabModeration, logs: tabLogs, welcome: () => tabCard('welcome'), leave: () => tabCard('leave'), roles: tabRoles, levels: tabLevels, commands: tabCommands, interaction: tabInteraction, translate: tabTranslate, games: tabGames, premium: tabPremium };
+const TAB_FN = { home: tabHome, messages: tabMessages, wiki: tabWiki, tickets: tabTickets, autoroles: tabAutoroles, moderation: tabModeration, logs: tabLogs, welcome: () => tabCard('welcome'), leave: () => tabCard('leave'), roles: tabRoles, levels: tabLevels, commands: tabCommands, interaction: tabInteraction, translate: tabTranslate, games: tabGames, identity: tabIdentity, premium: tabPremium };
 
 /* ---------- salvar / carregar ---------- */
 async function save() {

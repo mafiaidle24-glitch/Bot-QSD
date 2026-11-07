@@ -51,6 +51,7 @@ const PERKS = {
   logs: true,          // logs do servidor
   ticketTranscript: true, // transcrição .txt ao fechar ticket
   duelBoss: true,      // /duelo e /chefe
+  identity: true,      // nome, foto, banner e bio do bot no servidor
   panelButtons: 25,    // botões por painel de cargos
   panelPublishes: Infinity,   // publicações de painel de cargos por mês
   messagePublishes: Infinity, // publicações de mensagens/embeds por mês
@@ -64,6 +65,7 @@ const PERKS = {
 const FREE = {
   chatXp: 1, rpgCash: 1, rpgXp: 1, bossTries: 3, ticketTypes: 3, words: 30, levelCard: false,
   welcomeCard: false, autoroles: false, moderation: false, logs: false, ticketTranscript: false, duelBoss: false,
+  identity: true, // TEMPORÁRIO (testes): liberado para todos. Trocar para false para ser só Premium.
   panelButtons: 3, panelPublishes: 2, messagePublishes: 2, wikiPublishes: 1,
   customCommands: 5, triggers: 5, reactions: 5, translationsDay: 20, gamesDay: 30,
 };
@@ -166,6 +168,7 @@ function perkLines() {
     '⌨️ Comandos personalizados e 💬 interação: até ' + PERKS.customCommands + ' de cada (grátis: ' + FREE.customCommands + ')',
     '🌐 Traduções ilimitadas (grátis: ' + FREE.translationsDay + ' por dia)',
     '🎮 Mini jogos ilimitados (grátis: ' + FREE.gamesDay + ' usos por dia)',
+    '🎭 Identidade do bot no seu servidor: nome, foto, banner e bio',
     '🕴️ RPG: +' + Math.round((PERKS.rpgCash - 1) * 100) + '% de dinheiro e XP, ' + PERKS.bossTries + ' ataques/dia no chefão, /duelo e /chefe (grátis: sem duelo e chefão)',
   ];
 }

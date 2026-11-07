@@ -10,6 +10,7 @@ const cfgs = require('./config');
 const uploads = require('./uploads');
 const wiki = require('./wiki');
 const tickets = require('./tickets');
+const identity = require('./identity');
 const premium = require('./premium');
 const { renderCard } = require('./card');
 const { LANGS } = require('./translate');
@@ -133,7 +134,7 @@ function startWeb(bot) {
     days: premium.planDays(),
     perks: premium.perkLines(),
     limits: { ticketTypes: premium.perks(gid).ticketTypes, words: premium.perks(gid).words, levelCard: premium.perks(gid).levelCard },
-    features: ['welcomeCard', 'autoroles', 'moderation', 'logs', 'levelCard', 'ticketTranscript', 'duelBoss'].reduce((o, k) => ({ ...o, [k]: !!premium.perks(gid)[k] }), {}),
+    features: ['welcomeCard', 'autoroles', 'moderation', 'logs', 'levelCard', 'ticketTranscript', 'duelBoss', 'identity'].reduce((o, k) => ({ ...o, [k]: !!premium.perks(gid)[k] }), {}),
     quotas: ['panelPublishes', 'messagePublishes', 'wikiPublishes', 'translationsDay', 'gamesDay'].reduce((o, k) => {
       const q = premium.quota(gid, k);
       return { ...o, [k]: { limit: q.limit === Infinity ? null : q.limit, used: q.used, per: q.per } };
@@ -193,7 +194,7 @@ function startWeb(bot) {
       PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.EmbedLinks,
       PermissionFlagsBits.AttachFiles, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.AddReactions,
       PermissionFlagsBits.UseExternalEmojis, PermissionFlagsBits.ManageRoles, PermissionFlagsBits.ManageChannels,
-      PermissionFlagsBits.ManageMessages, PermissionFlagsBits.ModerateMembers, PermissionFlagsBits.KickMembers, PermissionFlagsBits.BanMembers,
+      PermissionFlagsBits.ManageMessages, PermissionFlagsBits.ModerateMembers, PermissionFlagsBits.KickMembers, PermissionFlagsBits.BanMembers, PermissionFlagsBits.ChangeNickname,
     ]).bitfield;
     const q = new URLSearchParams({ client_id: CLIENT_ID, permissions: String(perms), scope: 'bot applications.commands', guild_id: guildId });
     return `https://discord.com/oauth2/authorize?${q}`;
@@ -305,6 +306,14 @@ function startWeb(bot) {
     } catch (e) {
       res.status(400).json({ error: e.message });
     }
+  }));
+
+  // Identidade do bot neste servidor (apelido, foto, banner, bio): aplica ou remove.
+  app.post('/api/guilds/:id/identity/:action', requireAuth, guildAccess, rateLimit({ windowMs: 60_000, limit: 4 }), wrap(async (req, res) => {
+    const action = req.params.action;
+    if (!['apply', 'reset'].includes(action)) return res.status(400).json({ error: 'Ação inválida.' });
+    if (!premium.perks(req.guild.id).identity) return res.status(403).json({ error: premium.LOCK_MSG });
+    res.json(await identity.apply(client, req.guild.id, { reset: action === 'reset' }));
   }));
 
   app.get('/api/guilds/:id/uploads/:file', requireAuth, guildAccess, (req, res) => {

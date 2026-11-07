@@ -72,6 +72,7 @@ function defaults() {
     panels: [],
     messages: [],
     autoroles: { memberRoleIds: [], botRoleIds: [] },
+    identity: { nick: '', avatar: '', banner: '', bio: '' },
     moderation: {
       staffRoleIds: [],
       dmUser: true,
@@ -266,6 +267,13 @@ function sanitizeAutoroles(a) {
   return { memberRoleIds: idList(a.memberRoleIds, 10), botRoleIds: idList(a.botRoleIds, 10) };
 }
 
+// Identidade do bot neste servidor (só imagens enviadas pelo painel).
+function sanitizeIdentity(x) {
+  x = x && typeof x === 'object' ? x : {};
+  const up = (v) => (typeof v === 'string' && /^up:[a-f0-9]{12}\.(png|jpg|gif|webp)$/.test(v) ? v : '');
+  return { nick: str(x.nick, 32).trim(), avatar: up(x.avatar), banner: up(x.banner), bio: str(x.bio, 190).trim() };
+}
+
 // Tickets: atendimento privado por canal.
 function sanitizeTickets(t, old) {
   t = t && typeof t === 'object' ? t : {};
@@ -437,6 +445,7 @@ function sanitize(input, old) {
   out.tickets = sanitizeTickets(i.tickets, old);
   out.logs = sanitizeLogs(i.logs);
   out.autoroles = sanitizeAutoroles(i.autoroles);
+  out.identity = sanitizeIdentity(i.identity);
   out.moderation = sanitizeModeration(i.moderation);
 
   // Níveis
