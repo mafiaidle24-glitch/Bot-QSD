@@ -34,7 +34,7 @@ const who = (u) => (u ? '<@' + u.id + '> (' + cut(u.username || u.tag || u.id, 4
 function logMod(guild, { action, target: t, moderator, reason, extra }) {
   const e = new EmbedBuilder().setColor(COLORS.yellow).setTitle('🔨 ' + action)
     .addFields(
-      { name: 'Membro', value: who(t), inline: true },
+      { name: 'Membro', value: t ? who(t) : '—', inline: true },
       { name: 'Moderador', value: who(moderator), inline: true },
       { name: 'Motivo', value: cut(reason || 'Não informado', 1000) });
   if (extra) e.addFields({ name: 'Detalhes', value: cut(extra, 1000) });
