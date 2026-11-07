@@ -15,6 +15,9 @@ const commands = [
     .addStringOption((o) => o.setName('motivo').setDescription('Motivo do aviso').setRequired(true).setMaxLength(300)),
   new SlashCommandBuilder().setName('avisos').setDescription('Mostra os avisos de um membro (equipe)')
     .addUserOption((o) => o.setName('membro').setDescription('Membro').setRequired(true)),
+  new SlashCommandBuilder().setName('limpar').setDescription('Apaga várias mensagens do canal de uma vez (equipe)')
+    .addIntegerOption((o) => o.setName('quantidade').setDescription('Quantas mensagens apagar (1 a 500)').setRequired(true).setMinValue(1).setMaxValue(500))
+    .addUserOption((o) => o.setName('membro').setDescription('Apagar só as mensagens deste membro (opcional)')),
   new SlashCommandBuilder().setName('limparavisos').setDescription('Apaga todos os avisos de um membro (equipe)')
     .addUserOption((o) => o.setName('membro').setDescription('Membro').setRequired(true)),
   new SlashCommandBuilder().setName('silenciar').setDescription('Deixa um membro sem falar por um tempo (equipe)')
@@ -131,6 +134,42 @@ async function handleSlash(i, cfgAll) {
       if (!list.length) { await done('<@' + user.id + '> não tem avisos. ✅'); return true; }
       const lines = list.slice(-15).map((w, n) => (list.length > 15 ? list.length - 15 + n + 1 : n + 1) + '. <t:' + Math.floor(w.at / 1000) + ':d> — ' + w.reason + ' (por <@' + w.by + '>)');
       await i.reply({ embeds: [new EmbedBuilder().setColor(0xf0b232).setTitle('Avisos de ' + user.username + ' (' + list.length + ')').setDescription(cut(lines.join('\n'), 4000))], flags: EPHEMERAL, allowedMentions: { parse: [] } });
+      return true;
+    }
+    case 'limpar': {
+      const ch = i.channel;
+      const me = i.guild.members.me;
+      const perms = ch?.permissionsFor?.(me);
+      if (!ch?.bulkDelete || !perms?.has(PermissionFlagsBits.ManageMessages) || !perms.has(PermissionFlagsBits.ReadMessageHistory)) {
+        await done('⚠️ Eu preciso das permissões "Gerenciar mensagens" e "Ver histórico de mensagens" neste canal.');
+        return true;
+      }
+      await i.deferReply({ flags: EPHEMERAL });
+      const want = i.options.getInteger('quantidade');
+      const limit = Date.now() - 14 * 24 * 3600 * 1000; // o Discord só apaga em massa mensagens com menos de 14 dias
+      let deleted = 0, before, tooOld = false;
+      try {
+        while (deleted < want && !tooOld) {
+          const batch = await ch.messages.fetch({ limit: 100, ...(before ? { before } : {}) });
+          if (!batch.size) break;
+          before = batch.last().id;
+          const pick = [];
+          for (const m of batch.values()) {
+            if (m.createdTimestamp < limit) { tooOld = true; continue; }
+            if (m.pinned) continue;
+            if (user && m.author.id !== user.id) continue;
+            if (pick.length + deleted < want) pick.push(m);
+          }
+          if (pick.length) deleted += (await ch.bulkDelete(pick, true)).size;
+          if (batch.size < 100) break;
+        }
+      } catch (e) {
+        warn('limpar', e);
+        await i.editReply({ content: '⚠️ Deu erro no meio da limpeza (' + deleted + ' apagadas): ' + cut(e.message, 150) });
+        return true;
+      }
+      logs.logMod(i.guild, { action: 'Mensagens limpas', target: user || null, moderator: i.user, reason: 'Limpou ' + deleted + ' mensagem(ns) em #' + ch.name });
+      await i.editReply({ content: '🧹 ' + deleted + ' mensagem(ns) apagada(s)' + (user ? ' de <@' + user.id + '>' : '') + '.' + (deleted < want && tooOld ? '\nO resto tem mais de 14 dias, e o Discord não deixa apagar mensagens tão antigas em massa.' : deleted < want ? '\nNão havia mais mensagens para apagar.' : ''), allowedMentions: { parse: [] } });
       return true;
     }
     case 'limparavisos': {

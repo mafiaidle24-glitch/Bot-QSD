@@ -51,4 +51,30 @@ async function add(guild, type, buf) {
   return { name, animated: gif };
 }
 
-module.exports = { add };
+const NAME = /^qsd_\d+$/;
+
+/** Emojis e figurinhas criados pelo painel (nomes qsd_01, qsd_02…). */
+async function list(guild) {
+  const [em, st] = await Promise.all([guild.emojis.fetch(), guild.stickers.fetch()]);
+  const byName = (a, b) => a.name.localeCompare(b.name, undefined, { numeric: true });
+  const mine = (c) => [...c.values()].filter((x) => NAME.test(x.name || ''));
+  return {
+    emojis: mine(em).map((e) => ({ id: e.id, name: e.name, animated: !!e.animated, url: e.imageURL({ size: 64 }) })).sort(byName),
+    stickers: mine(st).map((s) => ({ id: s.id, name: s.name, url: s.url })).sort(byName),
+  };
+}
+
+/** Apaga um emoji ou figurinha — só os criados pelo painel (qsd_NN). */
+async function remove(guild, type, id) {
+  if (!guild.members.me.permissions.has(PermissionFlagsBits.ManageGuildExpressions)) {
+    throw new Error('O bot precisa da permissão "Gerenciar Expressões".');
+  }
+  const col = type === 'sticker' ? guild.stickers : guild.emojis;
+  const item = (await col.fetch()).get(id);
+  if (!item) throw new Error('Não encontrei esse item (talvez já tenha sido apagado).');
+  if (!NAME.test(item.name || '')) throw new Error('Só é possível apagar os itens criados pelo painel (qsd_01, qsd_02…).');
+  try { await col.delete(id, 'Apagado pelo painel do bot'); } catch (e) { throw new Error(explain(e)); }
+  return { ok: true, name: item.name };
+}
+
+module.exports = { add, list, remove };

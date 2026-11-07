@@ -842,7 +842,12 @@ client.on(Events.InteractionCreate, async (i) => {
 
 client.once(Events.ClientReady, async () => {
   log('Online como ' + client.user.tag + ' em ' + client.guilds.cache.size + ' servidor(es).');
-  client.user.setActivity('/rank • /quiz • /piada');
+  // "Jogando": troca de frase a cada 45 s
+  const STATUS = ['/aventura • RPG da máfia 🕴️', '/rank • /quiz • /ship', '/duelo • /chefe • /rali', '/painel • configure o seu servidor', '/premium • recursos extras 💎'];
+  let stIdx = 0;
+  const nextStatus = () => { try { client.user.setActivity(STATUS[stIdx++ % STATUS.length]); } catch (e) { warn('status', e); } };
+  nextStatus();
+  setInterval(nextStatus, 45_000).unref?.();
   premium.init(client);
   setTimeout(() => identity.sweep(client), 20_000);
   setInterval(() => identity.sweep(client), 10 * 60_000).unref?.();
@@ -865,6 +870,26 @@ client.once(Events.ClientReady, async () => {
     console.error('Erro ao atualizar o banner:', err);
   }
   // ====================================
+
+  // ===== Atualiza a bio (sobre mim) do bot =====
+  try {
+    const bio = [
+      '✨ BOT QSD - gerencie seu servidor pelo painel web!',
+      '🔹 Boas-vindas e saídas com cartão',
+      '🔹 Tickets, cargos por botão e autoroles',
+      '🔹 Moderação, automod e logs',
+      '🔹 Níveis, XP e rank',
+      '🔹 Tradutor automático e wiki',
+      '🎮 Mini jogos e RPG da máfia (/aventura)',
+      '💎 Plano Premium com recursos extras',
+      '🌐 ' + BASE_URL + '/',
+    ].join('\n');
+    await client.rest.patch('/applications/@me', { body: { description: bio.slice(0, 400) } });
+    log('Bio do bot atualizada.');
+  } catch (err) {
+    warn('bio do bot', err);
+  }
+  // ============================================
 });
 
 logs.attach(client);

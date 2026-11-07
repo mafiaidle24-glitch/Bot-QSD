@@ -384,6 +384,16 @@ function startWeb(bot) {
     }
   });
 
+  app.get('/api/guilds/:id/expressions', requireAuth, guildAccess, async (req, res) => {
+    try { res.json(await expressions.list(req.guild)); } catch (e) { res.status(400).json({ error: e.message }); }
+  });
+  app.delete('/api/guilds/:id/expressions/:type/:eid', requireAuth, guildAccess, async (req, res) => {
+    try {
+      if (!['emoji', 'sticker'].includes(req.params.type) || !/^\d{5,25}$/.test(req.params.eid)) return res.status(400).json({ error: 'Pedido inválido.' });
+      res.json(await expressions.remove(req.guild, req.params.type, req.params.eid));
+    } catch (e) { res.status(400).json({ error: e.message }); }
+  });
+
   app.use('/api', (req, res) => res.status(404).json({ error: 'Rota não encontrada.' }));
   app.use(express.static(path.join(__dirname, '..', 'public')));
 
