@@ -4,6 +4,7 @@ const {
   AttachmentBuilder, MessageFlags,
 } = require('discord.js');
 const cfgs = require('./config');
+const premium = require('./premium');
 
 const EPHEMERAL = MessageFlags.Ephemeral;
 const CATEGORY_NAME = '🎫 Tickets';
@@ -198,7 +199,7 @@ async function closeTicket(i) {
   try {
     let file;
     let count = 0;
-    if (cfg.transcript && cfg.logChannelId) {
+    if (cfg.transcript && cfg.logChannelId && premium.perks(i.guild.id).ticketTranscript) {
       const t = await buildTranscript(channel);
       count = t.count;
       file = new AttachmentBuilder(Buffer.from(t.text, 'utf8'), { name: 'transcricao-' + channel.name + '.txt' });

@@ -17,6 +17,7 @@ const logs = require('./logs');
 const moderation = require('./moderation');
 const minigames = require('./minigames');
 const rpg = require('./rpg');
+const premium = require('./premium');
 
 const EPHEMERAL = MessageFlags.Ephemeral;
 const BASE_URL = (process.env.BASE_URL || 'http://localhost:3000').replace(/\/$/, '');
@@ -110,6 +111,7 @@ async function applyRewards(guild, member, level, cfg) {
 async function giveXp(guild, member, amount, channel) {
   const cfg = cfgs.getConfig(guild.id).levels;
   if (!cfg.enabled || amount <= 0) return;
+  amount = Math.max(1, Math.round(amount * premium.perks(guild.id).chatXp));
   const u = db.getUser(guild.id, member.id);
   const before = levelInfo(u.xp).level;
   u.xp += amount;
@@ -125,7 +127,7 @@ async function giveXp(guild, member, amount, channel) {
   if (!target?.isTextBased()) return;
   const text = fmt(cfg.message, { member, guild, level: after });
   const payload = { content: text || undefined, allowedMentions: { users: [member.id] } };
-  if (cfg.announceStyle === 'card') {
+  if (cfg.announceStyle === 'card' && premium.perks(guild.id).levelCard) {
     try {
       const info = levelInfo(u.xp);
       const buf = await renderRank({
@@ -151,7 +153,7 @@ async function sendCard(kind, guild, who) {
     content: fmt(cfg.message, { member, user, guild }) || undefined,
     allowedMentions: kind === 'welcome' ? { users: [user.id], roles: [] } : { parse: [] },
   };
-  if (cfg.useImage) {
+  if (cfg.useImage && premium.perks(guild.id).welcomeCard) {
     const buf = await renderCard({
       ...cfg,
       kind,
@@ -168,7 +170,7 @@ client.on(Events.GuildMemberAdd, async (member) => {
   try {
     const all = cfgs.getConfig(member.guild.id);
     const cfg = all.welcome;
-    const autoIds = member.user.bot ? all.autoroles.botRoleIds : [...new Set([...all.autoroles.memberRoleIds, ...cfg.autoRoleIds])];
+    const autoIds = !premium.perks(member.guild.id).autoroles ? [] : member.user.bot ? all.autoroles.botRoleIds : [...new Set([...all.autoroles.memberRoleIds, ...cfg.autoRoleIds])];
     if (autoIds.length) {
       const ids = autoIds.filter((id) => member.guild.roles.cache.has(id));
       if (ids.length) await member.roles.add(ids, 'Cargo automático de boas-vindas').catch((e) => warn('cargo automático', e));
@@ -412,6 +414,7 @@ async function handleTranslate(msg, cfg) {
   const text = msg.cleanContent.trim();
   if (text.length < 2 || /^(https?:\/\/\S+\s*)+$/.test(text)) return;
   if (cfg.commands.prefix && text.startsWith(cfg.commands.prefix)) return;
+  if (!premium.consume(msg.guild.id, 'translationsDay')) return;
   const lines = [];
   for (const target of rule.targets) {
     try {
@@ -444,6 +447,7 @@ client.on(Events.MessageReactionAdd, async (reaction, user) => {
     if (!text) return dbg('ignorado: mensagem sem texto');
     if (onCooldown('flag:' + msg.id + ':' + lang, 8000)) return dbg('ignorado: cooldown');
     dbg('traduzindo para ' + lang);
+    const noQuota = !premium.consume(msg.guild.id, 'translationsDay');
 
     // Aviso curto que some sozinho (para a pessoa saber que o bot viu a bandeira).
     const note = async (content) => {
@@ -451,6 +455,11 @@ client.on(Events.MessageReactionAdd, async (reaction, user) => {
       if (m) setTimeout(() => m.delete().catch(() => {}), 7000);
     };
 
+    if (noQuota) {
+      const m = await msg.reply({ content: '🔒 ' + premium.quotaMsg(msg.guild.id, 'translationsDay'), allowedMentions: { parse: [], repliedUser: false } }).catch(() => null);
+      if (m) setTimeout(() => m.delete().catch(() => {}), 7000);
+      return;
+    }
     let r;
     try {
       r = await translate(text, lang);
@@ -550,6 +559,10 @@ function gameAllowed(i) {
   }
   if (g.channelId && g.channelId !== i.channelId) {
     i.reply({ content: 'Os jogos só funcionam em <#' + g.channelId + '>.', flags: EPHEMERAL });
+    return false;
+  }
+  if (!premium.consume(i.guild.id, 'gamesDay')) {
+    i.reply({ content: '🔒 ' + premium.quotaMsg(i.guild.id, 'gamesDay'), flags: EPHEMERAL });
     return false;
   }
   return true;
@@ -681,6 +694,7 @@ const slashCommands = [
   ...moderation.commands,
   ...minigames.commands,
   ...rpg.commands,
+  ...premium.commands,
 ].map((c) => c.setDMPermission(false).toJSON());
 
 async function registerCommands(guild) {
@@ -697,6 +711,7 @@ async function runSlash(i) {
   if (await moderation.handleSlash(i, cfg)) return;
   if (await minigames.handleSlash(i, { gameAllowed, reward })) return;
   if (await rpg.handleSlash(i, { gameAllowed })) return;
+  if (await premium.handleSlash(i)) return;
   switch (i.commandName) {
     case 'rank': {
       if (!cfg.levels.enabled) return i.reply({ content: 'O sistema de níveis está desativado.', flags: EPHEMERAL });
@@ -727,6 +742,7 @@ async function runSlash(i) {
       });
     }
     case 'traduzir': {
+      if (!premium.consume(i.guild.id, 'translationsDay')) return i.reply({ content: '🔒 ' + premium.quotaMsg(i.guild.id, 'translationsDay'), flags: EPHEMERAL });
       await i.deferReply();
       try {
         const r = await translate(i.options.getString('texto'), i.options.getString('idioma'));
@@ -813,6 +829,7 @@ client.on(Events.InteractionCreate, async (i) => {
       if (i.customId.startsWith('ppt:')) return await handlePptButton(i);
       if (i.customId.startsWith('tk:')) return await tickets.handleButton(i);
       if (i.customId.startsWith('rpg:')) return await rpg.handleButton(i);
+      if (i.customId.startsWith('pm:')) return await premium.handleButton(i);
     }
   } catch (e) {
     warn('interação', e);
@@ -825,6 +842,7 @@ client.on(Events.InteractionCreate, async (i) => {
 client.once(Events.ClientReady, async () => {
   log('Online como ' + client.user.tag + ' em ' + client.guilds.cache.size + ' servidor(es).');
   client.user.setActivity('/rank • /quiz • /piada');
+  premium.init(client);
   for (const guild of client.guilds.cache.values()) await registerCommands(guild);
 
   // ===== Atualiza o banner do bot =====

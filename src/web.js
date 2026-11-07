@@ -10,6 +10,8 @@ const cfgs = require('./config');
 const uploads = require('./uploads');
 const wiki = require('./wiki');
 const tickets = require('./tickets');
+const identity = require('./identity');
+const premium = require('./premium');
 const { renderCard } = require('./card');
 const { LANGS } = require('./translate');
 
@@ -122,6 +124,69 @@ function startWeb(bot) {
     next();
   });
 
+  /* ------------------------------ Premium ------------------------------ */
+
+  const isBotOwner = (req) => !!process.env.OWNER_ID && req.session.user?.id === process.env.OWNER_ID;
+  const premiumState = (gid) => ({
+    ...premium.info(gid),
+    mp: premium.mpOn(),
+    price: premium.price(),
+    days: premium.planDays(),
+    perks: premium.perkLines(),
+    limits: { ticketTypes: premium.perks(gid).ticketTypes, words: premium.perks(gid).words, levelCard: premium.perks(gid).levelCard },
+    features: ['welcomeCard', 'autoroles', 'moderation', 'logs', 'levelCard', 'ticketTranscript', 'duelBoss', 'identity'].reduce((o, k) => ({ ...o, [k]: !!premium.perks(gid)[k] }), {}),
+    quotas: ['panelPublishes', 'messagePublishes', 'wikiPublishes', 'translationsDay', 'gamesDay'].reduce((o, k) => {
+      const q = premium.quota(gid, k);
+      return { ...o, [k]: { limit: q.limit === Infinity ? null : q.limit, used: q.used, per: q.per } };
+    }, {}),
+    maxPanelButtons: premium.perks(gid).panelButtons,
+  });
+
+  // Webhook do Mercado Pago (sem login): só reconsulta o pagamento na API deles.
+  app.post('/mp/webhook', wrap(async (req, res) => {
+    await premium.handleWebhook(req.body, req.query);
+    res.sendStatus(200);
+  }));
+
+  app.get('/api/guilds/:id/premium', requireAuth, guildAccess, (req, res) => res.json(premiumState(req.guild.id)));
+
+  app.post('/api/guilds/:id/premium/checkout', requireAuth, guildAccess, rateLimit({ windowMs: 60_000, limit: 6 }), wrap(async (req, res) => {
+    try {
+      res.json({ payment: premium.publicPayment(await premium.createPayment(req.guild.id, req.session.user.id)) });
+    } catch (e) {
+      res.status(400).json({ error: e.message });
+    }
+  }));
+
+  app.get('/api/guilds/:id/premium/payments/:pid', requireAuth, guildAccess, wrap(async (req, res) => {
+    const rec = premium.store().payments[String(req.params.pid)];
+    if (!rec || rec.guildId !== req.guild.id) return res.status(404).json({ error: 'Pagamento não encontrado.' });
+    try {
+      const p = await premium.checkPayment(req.params.pid);
+      res.json({ payment: premium.publicPayment(p), premium: premiumState(req.guild.id) });
+    } catch (e) {
+      res.status(400).json({ error: e.message });
+    }
+  }));
+
+  // Área do dono do bot: dar/tirar Premium de qualquer servidor.
+  const requireBotOwner = (req, res, next) => (isBotOwner(req) ? next() : res.status(403).json({ error: 'Só o dono do bot.' }));
+  app.get('/api/owner/guilds', requireAuth, requireBotOwner, (req, res) => {
+    res.json(client.guilds.cache.map((g) => ({ id: g.id, name: g.name, members: g.memberCount, ...premium.info(g.id) })).sort((a, b) => a.name.localeCompare(b.name)));
+  });
+  app.post('/api/owner/premium', requireAuth, requireBotOwner, (req, res) => {
+    const gid = String(req.body?.guildId || '');
+    if (!client.guilds.cache.has(gid)) return res.status(404).json({ error: 'Servidor não encontrado.' });
+    if (req.body?.action === 'revoke') premium.revoke(gid);
+    else if (req.body?.action === 'exempt') premium.setExempt(gid, req.body.on !== false);
+    else {
+      const d = Math.round(Number(req.body?.days));
+      if (!(d >= 1 && d <= 3650)) return res.status(400).json({ error: 'Dias inválidos (1 a 3650).' });
+      premium.grant(gid, d, 'painel');
+    }
+    res.json({ ok: true, premium: premium.info(gid) });
+  });
+
   /* ------------------------------- API ------------------------------- */
 
   const inviteUrl = (guildId) => {
@@ -129,7 +194,7 @@ function startWeb(bot) {
       PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.EmbedLinks,
       PermissionFlagsBits.AttachFiles, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.AddReactions,
       PermissionFlagsBits.UseExternalEmojis, PermissionFlagsBits.ManageRoles, PermissionFlagsBits.ManageChannels,
-      PermissionFlagsBits.ManageMessages, PermissionFlagsBits.ModerateMembers, PermissionFlagsBits.KickMembers, PermissionFlagsBits.BanMembers,
+      PermissionFlagsBits.ManageMessages, PermissionFlagsBits.ModerateMembers, PermissionFlagsBits.KickMembers, PermissionFlagsBits.BanMembers, PermissionFlagsBits.ChangeNickname,
     ]).bitfield;
     const q = new URLSearchParams({ client_id: CLIENT_ID, permissions: String(perms), scope: 'bot applications.commands', guild_id: guildId });
     return `https://discord.com/oauth2/authorize?${q}`;
@@ -192,12 +257,14 @@ function startWeb(bot) {
       members,
       roles,
       botCanManageRoles: me.permissions.has(PermissionFlagsBits.ManageRoles),
+      premium: premiumState(guild.id),
+      isBotOwner: isBotOwner(req),
     });
   }));
 
   app.put('/api/guilds/:id/config', requireAuth, guildAccess, (req, res) => {
     const clean = cfgs.setConfig(req.guild.id, req.body);
-    res.json({ config: clean });
+    res.json({ config: clean, notices: cfgs.setConfig.notes || [] });
   });
 
   // Envio de imagens do celular/computador (corpo = bytes da imagem)
@@ -232,10 +299,21 @@ function startWeb(bot) {
 
   app.post('/api/guilds/:id/wiki/publish-list', requireAuth, guildAccess, wrap(async (req, res) => {
     try {
-      res.json({ ok: true, url: await wiki.publishList(req.guild) });
+      if (!premium.quota(req.guild.id, 'wikiPublishes').ok) return res.status(403).json({ error: premium.quotaMsg(req.guild.id, 'wikiPublishes') });
+      const url = await wiki.publishList(req.guild);
+      premium.consume(req.guild.id, 'wikiPublishes');
+      res.json({ ok: true, url });
     } catch (e) {
       res.status(400).json({ error: e.message });
     }
+  }));
+
+  // Identidade do bot neste servidor (apelido, foto, banner, bio): aplica ou remove.
+  app.post('/api/guilds/:id/identity/:action', requireAuth, guildAccess, rateLimit({ windowMs: 60_000, limit: 4 }), wrap(async (req, res) => {
+    const action = req.params.action;
+    if (!['apply', 'reset'].includes(action)) return res.status(400).json({ error: 'Ação inválida.' });
+    if (!premium.perks(req.guild.id).identity) return res.status(403).json({ error: premium.LOCK_MSG });
+    res.json(await identity.apply(client, req.guild.id, { reset: action === 'reset' }));
   }));
 
   app.get('/api/guilds/:id/uploads/:file', requireAuth, guildAccess, (req, res) => {
@@ -246,7 +324,9 @@ function startWeb(bot) {
 
   app.post('/api/guilds/:id/messages/:msgId/publish', requireAuth, guildAccess, wrap(async (req, res) => {
     try {
+      if (!premium.quota(req.guild.id, 'messagePublishes').ok) return res.status(403).json({ error: premium.quotaMsg(req.guild.id, 'messagePublishes') });
       const link = await bot.publishMessage(req.guild.id, req.params.msgId);
+      premium.consume(req.guild.id, 'messagePublishes');
       res.json({ ok: true, url: link });
     } catch (e) {
       res.status(400).json({ error: e.message });
@@ -255,7 +335,9 @@ function startWeb(bot) {
 
   app.post('/api/guilds/:id/panels/:panelId/publish', requireAuth, guildAccess, wrap(async (req, res) => {
     try {
+      if (!premium.quota(req.guild.id, 'panelPublishes').ok) return res.status(403).json({ error: premium.quotaMsg(req.guild.id, 'panelPublishes') });
       const link = await bot.publishPanel(req.guild.id, req.params.panelId);
+      premium.consume(req.guild.id, 'panelPublishes');
       res.json({ ok: true, url: link });
     } catch (e) {
       res.status(400).json({ error: e.message });

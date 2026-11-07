@@ -3,6 +3,7 @@ const {
   SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, MessageFlags,
 } = require('discord.js');
 const db = require('./db');
+const premium = require('./premium');
 
 const EPHEMERAL = MessageFlags.Ephemeral;
 const rand = (a, b) => Math.floor(Math.random() * (b - a + 1)) + a;
@@ -435,16 +436,17 @@ function ensureBoss(guildId, announce) {
   return { boss, escaped };
 }
 
-function bossView(p, uid, boss, note) {
+function bossView(p, uid, boss, note, gid) {
+  const TRIES = premium.perks(gid).bossTries;
   const day = dayKey();
   const used = p.bossDay === day ? p.bossTries || 0 : 0;
-  const left = Math.max(0, BOSS_TRIES_PER_DAY - used);
+  const left = Math.max(0, TRIES - used);
   const rank = topRank(boss).slice(0, 5).map(([id, d], n) => (['🥇', '🥈', '🥉'][n] || '▫️') + ' <@' + id + '> — ' + d.toLocaleString('pt-BR')).join('\n') || 'Ninguém atacou ainda.';
   const mine = boss.dmg[uid] || 0;
   const embed = new EmbedBuilder().setColor(boss.defeated ? 0x23a55a : 0x8e44ad).setTitle(boss.emoji + ' Chefão da semana: ' + boss.name)
     .setDescription((note ? note + '\n\n' : '') +
       (boss.defeated ? '✅ **Derrotado!** Voltará na próxima segunda-feira.' : '❤️ ' + bar(boss.hp, boss.hpMax, 12) + ' ' + boss.hp.toLocaleString('pt-BR') + '/' + boss.hpMax.toLocaleString('pt-BR')) +
-      '\n\n**Ranking de dano**\n' + rank + '\n\nSeu dano: **' + mine.toLocaleString('pt-BR') + '** • Tentativas hoje: **' + left + '/' + BOSS_TRIES_PER_DAY + '**' +
+      '\n\n**Ranking de dano**\n' + rank + '\n\nSeu dano: **' + mine.toLocaleString('pt-BR') + '** • Tentativas hoje: **' + left + '/' + TRIES + '**' +
       '\n\n🎁 Prêmio total: ' + money(boss.pool) + ' dividido pelo dano de cada um + kits para o top 3. Se ninguém o derrubar até domingo, ele escapa e paga só 30%.' +
       '\n⚠️ Cada ataque dura até ' + BOSS_ROUNDS + ' rodadas e custa vida (precisa de mais de 35%).');
   const row = new ActionRowBuilder().addComponents(
@@ -455,11 +457,12 @@ function bossView(p, uid, boss, note) {
 }
 
 /** Um ataque ao chefão. Devolve { text, killed }. */
-function bossAttack(p, uid, boss) {
+function bossAttack(p, uid, boss, gid) {
+  const TRIES = premium.perks(gid).bossTries;
   if (boss.defeated) return { text: '✅ O chefão já foi derrotado esta semana!' };
   const day = dayKey();
   if (p.bossDay !== day) { p.bossDay = day; p.bossTries = 0; }
-  if (p.bossTries >= BOSS_TRIES_PER_DAY) return { text: '⏳ Você já usou as ' + BOSS_TRIES_PER_DAY + ' tentativas de hoje. Volte amanhã!' };
+  if (p.bossTries >= TRIES) return { text: '⏳ Você já usou as ' + TRIES + ' tentativas de hoje. Volte amanhã!' };
   if (p.hp < Math.ceil(maxHp(p) * 0.35)) return { text: '🩸 Você está ferido demais. Use um 💊 kit ou espere a vida voltar.' };
   p.bossTries++;
   let hp = p.hp;
@@ -482,7 +485,7 @@ function bossAttack(p, uid, boss) {
 }
 
 /* ---------- ações ---------- */
-function fight(p, uid) {
+function fight(p, uid, gid) {
   const left = (fightCd.get(uid) || 0) - Date.now();
   if (left > 0) return { text: '⏳ Respire um pouco: espere **' + Math.ceil(left / 1000) + 's** para a próxima luta.' };
   if (p.hp < Math.ceil(maxHp(p) * 0.35)) return { text: '🩸 Você está ferido demais para lutar. Use um 💊 kit ou espere sua vida voltar.' };
@@ -496,10 +499,12 @@ function fight(p, uid) {
   let text;
   let won = r.won;
   if (r.won) {
-    const cash = Math.round(rand(e.cash[0], e.cash[1]) * clsOf(p).cash);
-    p.cash += cash; p.xp += e.xp; p.wins++;
-    progress(p, 'win', 1); progress(p, 'cash', cash); progress(p, 'xp', e.xp);
-    text = (e.boss ? '👑 **O Chefão em pessoa!** ' : '') + e.emoji + ' **' + e.name + '** foi derrubado!\n' + sum + '\n🏆 **Vitória!** +' + money(cash) + ' • +' + e.xp + ' XP';
+    const pk = premium.perks(gid);
+    const cash = Math.round(rand(e.cash[0], e.cash[1]) * clsOf(p).cash * pk.rpgCash);
+    const xpGain = Math.round(e.xp * pk.rpgXp);
+    p.cash += cash; p.xp += xpGain; p.wins++;
+    progress(p, 'win', 1); progress(p, 'cash', cash); progress(p, 'xp', xpGain);
+    text = (e.boss ? '👑 **O Chefão em pessoa!** ' : '') + e.emoji + ' **' + e.name + '** foi derrubado!\n' + sum + '\n🏆 **Vitória!** +' + money(cash) + ' • +' + xpGain + ' XP';
     while (p.xp >= xpNeeded(p.lvl)) {
       p.xp -= xpNeeded(p.lvl);
       p.lvl++;
@@ -547,12 +552,16 @@ async function handleSlash(i, helpers) {
     await i.reply({ embeds: [profileEmbed(p, i.user, '🕴️ Bem-vindo ao submundo! Lute, junte grana e compre equipamentos.')], components: menuRows(i.user.id), flags: EPHEMERAL });
     return true;
   }
+  if ((i.commandName === 'duelo' || i.commandName === 'chefe') && !premium.perks(i.guild.id).duelBoss) {
+    await i.reply({ content: premium.LOCK_MSG + ' (duelos e chefão semanal)', flags: EPHEMERAL });
+    return true;
+  }
   if (i.commandName === 'duelo') { await duelStart(i); return true; }
   if (i.commandName === 'chefe') {
     const p = player(i.guild.id, i.user.id);
     const { boss, escaped } = ensureBoss(i.guild.id);
     await announceEscaped(i.channel, escaped);
-    await i.reply({ ...bossView(p, i.user.id, boss), flags: EPHEMERAL, allowedMentions: { parse: [] } });
+    await i.reply({ ...bossView(p, i.user.id, boss, undefined, i.guild.id), flags: EPHEMERAL, allowedMentions: { parse: [] } });
     return true;
   }
   const all = Object.entries(db.data.rpg[i.guild.id] || {}).sort((a, b) => b[1].lvl - a[1].lvl || b[1].xp - a[1].xp || b[1].wins - a[1].wins).slice(0, 10);
@@ -584,7 +593,7 @@ async function handleButton(i) {
   };
   switch (action) {
     case 'menu': return back();
-    case 'fight': { const f = fight(p, uid); return back(f.text, f.won === undefined ? 0x808080 : f.won ? 0x23a55a : 0xda373c); }
+    case 'fight': { const f = fight(p, uid, i.guild.id); return back(f.text, f.won === undefined ? 0x808080 : f.won ? 0x23a55a : 0xda373c); }
     case 'kit': return back(useKit(p));
     case 'shop': return i.update(shopView(p, uid));
     case 'buyw': return i.update(shopView(p, uid, buy(p, WEAPONS, extra, 'weapon')));
@@ -600,15 +609,17 @@ async function handleButton(i) {
       return i.update(bizView(p, uid, '💰 Você coletou **' + money(n) + '**!'));
     }
     case 'boss': {
+      if (!premium.perks(i.guild.id).duelBoss) return back(premium.LOCK_MSG + ' (chefão semanal)');
       const { boss, escaped } = ensureBoss(i.guild.id);
       await announceEscaped(i.channel, escaped);
-      return i.update(bossView(p, uid, boss));
+      return i.update(bossView(p, uid, boss, undefined, i.guild.id));
     }
     case 'bossatk': {
+      if (!premium.perks(i.guild.id).duelBoss) return back(premium.LOCK_MSG + ' (chefão semanal)');
       const { boss, escaped } = ensureBoss(i.guild.id);
       await announceEscaped(i.channel, escaped);
-      const r = bossAttack(p, uid, boss);
-      await i.update(bossView(p, uid, boss, r.text));
+      const r = bossAttack(p, uid, boss, i.guild.id);
+      await i.update(bossView(p, uid, boss, r.text, i.guild.id));
       if (r.killed) {
         const lines = payBoss(i.guild.id, boss, 1, uid);
         await i.channel.send({ embeds: [new EmbedBuilder().setColor(0x23a55a).setTitle('☠️ ' + boss.name + ' foi derrotado!')

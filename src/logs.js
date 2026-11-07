@@ -1,6 +1,7 @@
 // Logs do servidor: registra num canal privado o que acontece (mensagens, entradas, cargos, bans, canais, moderação).
 const { EmbedBuilder } = require('discord.js');
 const cfgs = require('./config');
+const premium = require('./premium');
 
 const warn = (where, e) => console.error('[logs] erro em ' + where + ':', e?.message || e);
 const cut = (s, n) => { s = String(s || ''); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
@@ -18,6 +19,7 @@ async function target(guild, event, channelId) {
 
 async function post(guild, event, embed, channelId) {
   try {
+    if (!premium.perks(guild.id).logs) return;
     const ch = await target(guild, event, channelId);
     if (!ch) return;
     await ch.send({ embeds: [embed.setTimestamp()], allowedMentions: { parse: [] } });

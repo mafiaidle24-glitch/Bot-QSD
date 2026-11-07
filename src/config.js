@@ -1,6 +1,7 @@
 // Configuração por servidor: valores padrão, validação e cache.
 const crypto = require('crypto');
 const db = require('./db');
+const premium = require('./premium');
 
 const ID = /^\d{15,25}$/;
 const HEX = /^#[0-9a-fA-F]{6}$/;
@@ -71,6 +72,7 @@ function defaults() {
     panels: [],
     messages: [],
     autoroles: { memberRoleIds: [], botRoleIds: [] },
+    identity: { nick: '', avatar: '', banner: '', bio: '' },
     moderation: {
       staffRoleIds: [],
       dmUser: true,
@@ -265,6 +267,13 @@ function sanitizeAutoroles(a) {
   return { memberRoleIds: idList(a.memberRoleIds, 10), botRoleIds: idList(a.botRoleIds, 10) };
 }
 
+// Identidade do bot neste servidor (só imagens enviadas pelo painel).
+function sanitizeIdentity(x) {
+  x = x && typeof x === 'object' ? x : {};
+  const up = (v) => (typeof v === 'string' && /^up:[a-f0-9]{12}\.(png|jpg|gif|webp)$/.test(v) ? v : '');
+  return { nick: str(x.nick, 32).trim(), avatar: up(x.avatar), banner: up(x.banner), bio: str(x.bio, 190).trim() };
+}
+
 // Tickets: atendimento privado por canal.
 function sanitizeTickets(t, old) {
   t = t && typeof t === 'object' ? t : {};
@@ -436,6 +445,7 @@ function sanitize(input, old) {
   out.tickets = sanitizeTickets(i.tickets, old);
   out.logs = sanitizeLogs(i.logs);
   out.autoroles = sanitizeAutoroles(i.autoroles);
+  out.identity = sanitizeIdentity(i.identity);
   out.moderation = sanitizeModeration(i.moderation);
 
   // Níveis
@@ -539,8 +549,26 @@ function getConfig(guildId) {
   return c;
 }
 
+/** Aplica os limites do plano grátis. Devolve avisos do que foi cortado. */
+function applyLimits(guildId, clean) {
+  const pk = premium.perks(guildId);
+  const notes = [];
+  const types = clean.tickets?.panel?.types;
+  if (types && types.length > pk.ticketTypes) { types.length = pk.ticketTypes; notes.push('Tickets: o plano grátis permite ' + pk.ticketTypes + ' tipos (os extras não foram salvos).'); }
+  const words = clean.moderation?.automod?.words?.list;
+  if (words && words.length > pk.words) { words.length = pk.words; notes.push('Automod: o plano grátis permite ' + pk.words + ' palavras proibidas (as extras não foram salvas).'); }
+  const cap = (list, n, what) => { if (Array.isArray(list) && list.length > n) { list.length = n; notes.push(what + ': o plano grátis permite ' + n + ' (os extras não foram salvos).'); } };
+  for (const p of clean.panels || []) cap(p.buttons, pk.panelButtons, 'Painel de cargos "' + (p.name || p.title || 'sem nome') + '" botões');
+  cap(clean.commands?.list, pk.customCommands, 'Comandos personalizados');
+  cap(clean.interaction?.triggers, pk.triggers, 'Respostas automáticas');
+  cap(clean.interaction?.reactions, pk.reactions, 'Reações automáticas');
+  if (clean.levels && clean.levels.announceStyle === 'card' && !pk.levelCard) { clean.levels.announceStyle = 'text'; notes.push('O cartão no aviso de nível é um recurso Premium.'); }
+  return notes;
+}
+
 function setConfig(guildId, input) {
   const clean = sanitize(input, getConfig(guildId));
+  setConfig.notes = applyLimits(guildId, clean);
   db.data.guilds[guildId] = clean;
   cache.set(guildId, clean);
   db.save();
