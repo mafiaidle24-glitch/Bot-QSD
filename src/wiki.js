@@ -4,6 +4,7 @@ const path = require('path');
 const { AttachmentBuilder, EmbedBuilder } = require('discord.js');
 const cfgs = require('./config');
 const uploads = require('./uploads');
+const premium = require('./premium');
 
 const cooldowns = new Map();
 function onCooldown(key, ms) {
@@ -17,7 +18,7 @@ function onCooldown(key, ms) {
 function allowed(msg, w) {
   if (w.who === 'everyone') return true;
   if (msg.guild.ownerId === msg.author.id) return true;
-  if (process.env.OWNER_ID && msg.author.id === process.env.OWNER_ID) return true;
+  if (premium.isBotOwner(msg.author.id)) return true;
   if (w.who === 'roles') return !!msg.member && w.roleIds.some((id) => msg.member.roles.cache.has(id));
   return false;
 }

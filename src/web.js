@@ -126,7 +126,7 @@ function startWeb(bot) {
 
   /* ------------------------------ Premium ------------------------------ */
 
-  const isBotOwner = (req) => !!process.env.OWNER_ID && req.session.user?.id === process.env.OWNER_ID;
+  const isBotOwner = (req) => premium.isBotOwner(req.session.user?.id);
   const premiumState = (gid) => ({
     ...premium.info(gid),
     mp: premium.mpOn(),
