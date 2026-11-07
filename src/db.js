@@ -6,7 +6,7 @@ const DIR = process.env.DATA_DIR || path.join(__dirname, '..', 'data');
 const FILE = path.join(DIR, 'db.json');
 fs.mkdirSync(DIR, { recursive: true });
 
-let data = { guilds: {}, users: {}, warns: {}, rpg: {}, rpgboss: {}, premium: { guilds: {}, payments: {}, usage: {} } };
+let data = { guilds: {}, users: {}, warns: {}, rpg: {}, rpgboss: {}, premium: { guilds: {}, payments: {}, usage: {}, identity: {} } };
 try {
   const raw = JSON.parse(fs.readFileSync(FILE, 'utf8'));
   data.guilds = raw.guilds || {};
@@ -14,7 +14,7 @@ try {
   data.warns = raw.warns || {};
   data.rpg = raw.rpg || {};
   data.rpgboss = raw.rpgboss || {};
-  data.premium = { guilds: (raw.premium && raw.premium.guilds) || {}, payments: (raw.premium && raw.premium.payments) || {}, usage: (raw.premium && raw.premium.usage) || {} };
+  data.premium = { guilds: (raw.premium && raw.premium.guilds) || {}, payments: (raw.premium && raw.premium.payments) || {}, usage: (raw.premium && raw.premium.usage) || {}, identity: (raw.premium && raw.premium.identity) || {} };
 } catch {
   /* arquivo novo */
 }
