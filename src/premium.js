@@ -72,15 +72,20 @@ const FREE = {
 const lim = (n) => (n === Infinity ? 'ilimitado' : String(n));
 
 let client = null;
+let appOwner = '';
+/** ID do dono do bot: a variável OWNER_ID ou, se não houver, o dono do aplicativo no Discord. */
+const botOwnerId = () => process.env.OWNER_ID || appOwner || '';
+const isBotOwner = (id) => !!id && id === botOwnerId();
 function init(c) {
   client = c;
+  c.application?.fetch().then((a) => { appOwner = a.owner?.ownerId || a.owner?.id || ''; }).catch((e) => console.warn('[premium] dono do app:', e.message));
   setInterval(() => pollPending().catch((e) => console.warn('[premium] verificação:', e.message)), 45_000).unref?.();
 }
 
 /* -------------------------------- estado -------------------------------- */
 
 const store = () => db.data.premium;
-const ownerGuild = (gid) => !!(process.env.OWNER_ID && client?.guilds.cache.get(gid)?.ownerId === process.env.OWNER_ID);
+const ownerGuild = (gid) => !!botOwnerId() && client?.guilds.cache.get(gid)?.ownerId === botOwnerId();
 const exemptGuild = (gid) => !!store().guilds[gid]?.exempt;
 
 /** { active, free, until, daysLeft } */
@@ -300,7 +305,7 @@ async function handleSlash(i) {
     await i.reply({ ...mainView(i.guild.id), flags: EPHEMERAL });
     return true;
   }
-  if (!process.env.OWNER_ID || i.user.id !== process.env.OWNER_ID) {
+  if (!isBotOwner(i.user.id)) {
     await i.reply({ content: 'Só o dono do bot pode usar isso.', flags: EPHEMERAL });
     return true;
   }
@@ -350,7 +355,7 @@ async function handleButton(i) {
 }
 
 module.exports = {
-  commands, handleSlash, handleButton, init, info, isPremium, perks, grant, revoke, setExempt, quota, consume, quotaMsg, LOCK_MSG, lim, statusLine, perkLines,
+  botOwnerId, isBotOwner, commands, handleSlash, handleButton, init, info, isPremium, perks, grant, revoke, setExempt, quota, consume, quotaMsg, LOCK_MSG, lim, statusLine, perkLines,
   mpOn, price, planDays, money, createPayment, checkPayment, handleWebhook, publicPayment, pollPending,
   PERKS, FREE, store, fmtDate,
 };

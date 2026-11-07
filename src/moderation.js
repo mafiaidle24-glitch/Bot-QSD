@@ -38,7 +38,7 @@ const NAMES = new Set(commands.map((c) => c.name));
 function isStaff(member, guild, cfg) {
   if (!member) return false;
   if (guild.ownerId === member.id) return true;
-  if (process.env.OWNER_ID && process.env.OWNER_ID === member.id) return true;
+  if (premium.isBotOwner(member.id)) return true;
   if (member.permissions.has(PermissionFlagsBits.Administrator)) return true;
   return cfg.staffRoleIds.some((id) => member.roles.cache.has(id));
 }
