@@ -1221,6 +1221,28 @@ function tabWiki() {
 /* ---------- Emojis e figurinhas do servidor ---------- */
 function tabExpressions() {
   const log = h('div');
+  const gallery = h('div', { style: 'margin-top:14px' });
+  const item = (type, x) => h('div', { style: 'display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--line,#2a2d33)' },
+    hideOnError(h('img', { src: x.url, alt: '', style: 'width:' + (type === 'sticker' ? '56px' : '36px') + ';height:' + (type === 'sticker' ? '56px' : '36px') + ';object-fit:contain;border-radius:6px;background:#1d1f24' })),
+    h('span', { style: 'flex:1' }, h('code', {}, x.name), x.animated ? ' (animado)' : ''),
+    h('button', { class: 'btn danger small', onclick: async () => {
+      if (!confirm('Apagar ' + x.name + ' do servidor? Isso não pode ser desfeito.')) return;
+      try { await api('/api/guilds/' + st.gid + '/expressions/' + type + '/' + x.id, { method: 'DELETE' }); toast(x.name + ' apagado.', 'ok'); loadList(); }
+      catch (e) { toast(e.message, 'err'); }
+    } }, '🗑️ Apagar'));
+  async function loadList() {
+    gallery.replaceChildren(h('p', { style: 'color:var(--muted)' }, '⏳ Carregando…'));
+    try {
+      const d = await api('/api/guilds/' + st.gid + '/expressions');
+      gallery.replaceChildren(
+        h('h4', {}, '😀 Emojis do painel (' + d.emojis.length + ')'),
+        d.emojis.length ? d.emojis.map((x) => item('emoji', x)) : h('p', { style: 'color:var(--muted)' }, 'Nenhum ainda.'),
+        h('h4', { style: 'margin-top:14px' }, '🖼️ Figurinhas do painel (' + d.stickers.length + ')'),
+        d.stickers.length ? d.stickers.map((x) => item('sticker', x)) : h('p', { style: 'color:var(--muted)' }, 'Nenhuma ainda.'),
+        h('p', { class: 'sub', style: 'margin-top:10px' }, 'Aqui aparecem só os itens criados pelo painel (qsd_01, qsd_02…). Os outros emojis do servidor não são mexidos.'));
+    } catch (e) { gallery.replaceChildren(h('p', { style: 'color:#ff8a8a' }, '⚠️ ' + e.message)); }
+  }
+  setTimeout(loadList, 0);
   const pick = (type) => {
     const f = h('input', { type: 'file', accept: 'image/png,image/jpeg,image/gif,image/webp', multiple: true, style: 'display:none' });
     f.addEventListener('change', async () => {
@@ -1243,6 +1265,7 @@ function tabExpressions() {
       log.replaceChildren(
         h('p', {}, '✅ ' + ok + ' criado(s) de ' + list.length + '.'),
         fails.map((x) => h('p', { style: 'color:#ff8a8a' }, '⚠️ ' + x)));
+      loadList();
     });
     f.click();
   };
@@ -1250,7 +1273,7 @@ function tabExpressions() {
     h('div', { class: 'dbtns' },
       h('button', { class: 'btn', onclick: () => pick('emoji') }, '😀 Importar emojis'),
       h('button', { class: 'btn', onclick: () => pick('sticker') }, '🖼️ Importar figurinhas')),
-    log);
+    log, gallery);
 }
 
 const TAB_FN = { home: tabHome, messages: tabMessages, wiki: tabWiki, tickets: tabTickets, autoroles: tabAutoroles, moderation: tabModeration, logs: tabLogs, welcome: () => tabCard('welcome'), leave: () => tabCard('leave'), roles: tabRoles, levels: tabLevels, commands: tabCommands, interaction: tabInteraction, translate: tabTranslate, games: tabGames, identity: tabIdentity, expressions: tabExpressions, premium: tabPremium };
