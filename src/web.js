@@ -11,6 +11,7 @@ const uploads = require('./uploads');
 const wiki = require('./wiki');
 const tickets = require('./tickets');
 const identity = require('./identity');
+const expressions = require('./expressions');
 const premium = require('./premium');
 const { renderCard } = require('./card');
 const { LANGS } = require('./translate');
@@ -195,6 +196,7 @@ function startWeb(bot) {
       PermissionFlagsBits.AttachFiles, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.AddReactions,
       PermissionFlagsBits.UseExternalEmojis, PermissionFlagsBits.ManageRoles, PermissionFlagsBits.ManageChannels,
       PermissionFlagsBits.ManageMessages, PermissionFlagsBits.ModerateMembers, PermissionFlagsBits.KickMembers, PermissionFlagsBits.BanMembers, PermissionFlagsBits.ChangeNickname,
+      PermissionFlagsBits.ManageGuildExpressions,
     ]).bitfield;
     const q = new URLSearchParams({ client_id: CLIENT_ID, permissions: String(perms), scope: 'bot applications.commands', guild_id: guildId });
     return `https://discord.com/oauth2/authorize?${q}`;
@@ -369,6 +371,18 @@ function startWeb(bot) {
     });
     res.set('Content-Type', 'image/png').send(buf);
   }));
+
+  // Emojis e figurinhas do servidor (nomeados qsd_01, qsd_02...)
+  app.post('/api/guilds/:id/expressions/:type', requireAuth, guildAccess, express.raw({ type: '*/*', limit: uploads.MAX }), async (req, res) => {
+    try {
+      const type = req.params.type;
+      if (!['emoji', 'sticker'].includes(type)) return res.status(400).json({ error: 'Tipo inválido.' });
+      if (!Buffer.isBuffer(req.body) || !req.body.length) return res.status(400).json({ error: 'Nenhuma imagem recebida (máx. 8 MB).' });
+      res.json(await expressions.add(req.guild, type, req.body));
+    } catch (e) {
+      res.status(400).json({ error: e.message });
+    }
+  });
 
   app.use('/api', (req, res) => res.status(404).json({ error: 'Rota não encontrada.' }));
   app.use(express.static(path.join(__dirname, '..', 'public')));
