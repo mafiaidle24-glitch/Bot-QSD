@@ -65,7 +65,7 @@ const PERKS = {
 const FREE = {
   chatXp: 1, rpgCash: 1, rpgXp: 1, bossTries: 3, ticketTypes: 3, words: 30, levelCard: false,
   welcomeCard: false, autoroles: false, moderation: false, logs: false, ticketTranscript: false, duelBoss: false,
-  identity: true, // TEMPORÁRIO (testes): liberado para todos. Trocar para false para ser só Premium.
+  identity: false,
   panelButtons: 3, panelPublishes: 2, messagePublishes: 2, wikiPublishes: 1,
   customCommands: 5, triggers: 5, reactions: 5, translationsDay: 20, gamesDay: 30,
 };

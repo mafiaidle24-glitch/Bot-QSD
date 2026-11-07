@@ -312,7 +312,7 @@ function startWeb(bot) {
   app.post('/api/guilds/:id/identity/:action', requireAuth, guildAccess, rateLimit({ windowMs: 60_000, limit: 4 }), wrap(async (req, res) => {
     const action = req.params.action;
     if (!['apply', 'reset'].includes(action)) return res.status(400).json({ error: 'Ação inválida.' });
-    if (!premium.perks(req.guild.id).identity) return res.status(403).json({ error: premium.LOCK_MSG });
+    if (action === 'apply' && !premium.perks(req.guild.id).identity) return res.status(403).json({ error: premium.LOCK_MSG });
     res.json(await identity.apply(client, req.guild.id, { reset: action === 'reset' }));
   }));
 
