@@ -275,7 +275,7 @@ function msgPreview(text, imgEl) {
 const TABS = [
   ['home', '🏠 Início'], ['welcome', '👋 Boas-vindas'], ['leave', '🚪 Saída'], ['roles', '🎛️ Cargos / Botões'], ['messages', '📨 Mensagens / Embeds'], ['wiki', '📖 Wiki de Capos'], ['tickets', '🎫 Tickets'], ['autoroles', '🏷️ Autoroles'], ['moderation', '🔨 Moderação'], ['logs', '📜 Logs'],
   ['levels', '⭐ Rank / Níveis'], ['commands', '⌨️ Comandos'], ['interaction', '💬 Interação'],
-  ['translate', '🌐 Tradução'], ['games', '🎮 Mini jogos'],
+  ['translate', '🌐 Tradução'], ['games', '🎮 Mini jogos'], ['identity', '🎭 Identidade'], ['premium', '💎 Premium'],
 ];
 
 function tabHome() {
@@ -562,7 +562,7 @@ function tabLevels() {
       h('div', { class: 'row' },
         field('Aviso de novo nível', sel(l, 'announce', [{ v: 'same', t: 'No mesmo canal da conversa' }, { v: 'channel', t: 'Em um canal específico' }, { v: 'off', t: 'Não avisar' }], { empty: null })),
         field('Canal dos avisos', sel(l, 'channelId', chOpts()))),
-      field('Como avisar', sel(l, 'announceStyle', [{ v: 'text', t: 'Só a frase' }, { v: 'card', t: 'Frase + cartão de rank (imagem)' }], { empty: null })),
+      field('Como avisar', sel(l, 'announceStyle', [{ v: 'text', t: 'Só a frase' }, { v: 'card', t: 'Frase + cartão de rank (imagem) — 💎 Premium' }], { empty: null })),
       field('Mensagem de novo nível', tArea(l, 'message', { rows: 2, max: 500 }), 'Use {user} e {level}. Se deixar vazio com o cartão ligado, vai só a imagem.')),
     card('Recompensas por nível', 'Ao chegar no nível, o membro ganha o cargo.',
       chk(l, 'stackRewards', 'Acumular cargos (desmarcado = mantém só o cargo do maior nível)'),
@@ -571,6 +571,159 @@ function tabLevels() {
     card('Ignorar', 'Onde ou quem não ganha XP.',
       field('Canais ignorados', multi(l, 'ignoredChannels', chOpts(), { label: 'adicionar canal' })),
       field('Cargos ignorados', multi(l, 'ignoredRoles', roleOpts(), { label: 'adicionar cargo' }))));
+}
+
+/* ---------- avisos do plano grátis (por aba) ---------- */
+function tabNotice(tab) {
+  const pm = st.data.premium;
+  if (!pm || pm.active) return h('span');
+  const q = pm.quotas || {};
+  const use = (k) => (q[k] ? q[k].used + ' de ' + q[k].limit + ' usados' + (q[k].per === 'month' ? ' este mês' : ' hoje') : '');
+  const LOCK = '🔒 Este recurso é exclusivo do plano 💎 Premium. Você pode configurar, mas ele só funciona com o Premium ativo.';
+  const T = {
+    welcome: '💎 No plano grátis o bot envia só a mensagem de texto. O cartão com imagem é Premium.',
+    leave: '💎 No plano grátis o bot envia só a mensagem de texto. O cartão com imagem é Premium.',
+    roles: '💎 Plano grátis: até ' + (pm.maxPanelButtons) + ' botões por painel e ' + (q.panelPublishes ? q.panelPublishes.limit : '') + ' publicações por mês (' + use('panelPublishes') + ').',
+    messages: '💎 Plano grátis: ' + (q.messagePublishes ? q.messagePublishes.limit : '') + ' publicações por mês (' + use('messagePublishes') + ').',
+    wiki: '💎 Plano grátis: ' + (q.wikiPublishes ? q.wikiPublishes.limit : '') + ' publicação da lista por mês (' + use('wikiPublishes') + ').',
+    tickets: '💎 Plano grátis: até ' + pm.limits.ticketTypes + ' tipos de ticket e sem transcrição .txt.',
+    autoroles: LOCK, moderation: LOCK, logs: LOCK,
+    identity: pm.features && pm.features.identity === false ? LOCK : '',
+    levels: '💎 O cartão de rank no aviso de nível é Premium.',
+    commands: '💎 Plano grátis: até 5 comandos personalizados.',
+    interaction: '💎 Plano grátis: até 5 respostas automáticas e 5 reações automáticas.',
+    translate: '💎 Plano grátis: ' + (q.translationsDay ? q.translationsDay.limit : '') + ' traduções por dia (' + use('translationsDay') + ').',
+    games: '💎 Plano grátis: ' + (q.gamesDay ? q.gamesDay.limit : '') + ' usos de comandos de jogo por dia (' + use('gamesDay') + '). /duelo e /chefe são Premium.',
+  };
+  return T[tab] ? h('div', { class: 'warn' }, T[tab]) : h('span');
+}
+
+/* ---------- Identidade do bot neste servidor ---------- */
+function filePicker(o, k, round) {
+  const box = h('div', { class: 'imgp' });
+  const draw = () => {
+    const v = o[k] || '';
+    const file = h('input', { type: 'file', accept: 'image/png,image/jpeg,image/gif,image/webp', style: 'display:none' });
+    file.addEventListener('change', async () => {
+      const f = file.files && file.files[0];
+      if (!f) return;
+      if (f.size > 8 * 1024 * 1024) { toast('Imagem muito grande (máx. 8 MB).', 'err'); return; }
+      try {
+        const r = await fetch('/api/guilds/' + st.gid + '/uploads' + (round ? '?round=1' : ''), { method: 'POST', credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/octet-stream' }, body: await f.arrayBuffer() });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(j.error || 'Erro ' + r.status);
+        o[k] = j.ref; dirty(); draw();
+        toast('Imagem enviada! Toque em "Aplicar no servidor".', 'ok');
+      } catch (e) { toast(e.message, 'err'); }
+    });
+    box.replaceChildren(
+      h('div', { class: 'ir' },
+        h('button', { class: 'btn ghost small', type: 'button', onclick: () => { file.value = ''; file.click(); } }, v ? '🔁 Trocar imagem' : '📁 Enviar do aparelho'),
+        v ? h('button', { class: 'btn danger small', type: 'button', onclick: () => { o[k] = ''; dirty(); draw(); } }, 'Limpar') : null,
+        file),
+      v ? hideOnError(h('img', { src: imgSrc(v), alt: '', style: 'max-width:' + (k === 'banner' ? '320px' : '120px') + ';border-radius:' + (k === 'avatar' ? '50%' : '8px') + ';margin-top:8px' })) : null);
+  };
+  draw();
+  return box;
+}
+
+function tabIdentity() {
+  const id = st.cfg.identity;
+  const result = h('div', { id: 'idresult', style: 'margin-top:10px' });
+  async function run(action) {
+    const show = (...kids) => { const el = $('#idresult'); if (el) el.replaceChildren(...kids.filter(Boolean)); };
+    try {
+      if (st.dirty) await save(); // salvar redesenha a aba, por isso o resultado é buscado de novo
+      show(h('p', { style: 'color:var(--muted)' }, '⏳ Aplicando no Discord…'));
+      const r = await api('/api/guilds/' + st.gid + '/identity/' + action, { method: 'POST' });
+      show(
+        r.ok.length ? h('p', {}, '✅ ' + (action === 'reset' ? 'Voltou ao padrão: ' : 'Aplicado: ') + r.ok.join(', ') + '.') : null,
+        ...r.errors.map((e) => h('p', { style: 'color:#ff8a8a' }, '⚠️ ' + e)),
+        h('p', { style: 'color:var(--muted)' }, 'No Discord pode demorar alguns segundos para atualizar (às vezes só depois de reabrir o app).'));
+    } catch (e) { show(h('p', { style: 'color:#ff8a8a' }, '⚠️ ' + e.message)); }
+  }
+  return h('div', {},
+    card('🎭 Identidade do bot neste servidor', 'Escolha como o bot aparece só no seu servidor: nome, foto, banner e bio. Em outros servidores ele continua igual.',
+      field('Nome (apelido do bot)', tInput(id, 'nick', { ph: 'ex.: Capanga do Chefe', max: 32 }), 'Até 32 caracteres. Vazio = nome padrão.'),
+      field('Foto do bot', filePicker(id, 'avatar', false), 'PNG, JPG, GIF ou WEBP, até 8 MB. Imagem quadrada fica melhor.'),
+      field('Banner do bot', filePicker(id, 'banner', false), 'Imagem larga (ex.: 600x240). Aparece no perfil do bot neste servidor.'),
+      field('Bio (sobre o bot)', tArea(id, 'bio', { rows: 3, max: 190, tools: false }), 'Até 190 caracteres.'),
+      h('div', {},
+        h('button', { class: 'btn green', onclick: () => run('apply') }, '🎭 Aplicar no servidor'), ' ',
+        h('button', { class: 'btn ghost', onclick: () => { if (confirm('Voltar o nome, a foto, o banner e a bio do bot ao padrão neste servidor?')) run('reset'); } }, 'Voltar ao padrão')),
+      result,
+      h('p', { class: 'sub', style: 'margin-top:10px' }, 'Dica: se aparecer erro de permissão no nome, dê ao bot a permissão "Alterar apelido" (ou convide de novo pelo painel). O Discord limita trocas muito seguidas de imagem; se acontecer, espere alguns minutos.')));
+}
+
+function tabPremium() {
+  const pm = st.data.premium;
+  const until = (ms) => new Date(ms).toLocaleDateString('pt-BR');
+  const box = h('div', {});
+  const status = pm.paid
+    ? '💎 Premium ativo até ' + until(pm.until) + ' (' + pm.daysLeft + ' dia(s))'
+    : pm.free ? '💎 Premium grátis: servidor isento de pagamento.' : '🔒 Este servidor está no plano grátis.';
+  const payBox = h('div', { id: 'paybox' });
+  async function pay() {
+    try {
+      const r = await api('/api/guilds/' + st.gid + '/premium/checkout', { method: 'POST' });
+      const p = r.payment;
+      const code = h('textarea', { rows: 4, readonly: true, style: 'width:100%;font-family:monospace;font-size:12px' });
+      code.value = p.code;
+      payBox.replaceChildren(
+        h('p', {}, '1. Abra o app do seu banco → Pix → ', h('b', {}, 'Copia e Cola'), ' (ou leia o QR code).  2. Pague R$ ' + p.amount.toFixed(2).replace('.', ',') + '.  3. Esta página confirma sozinha.'),
+        p.qr ? h('img', { src: 'data:image/png;base64,' + p.qr, alt: 'QR Pix', style: 'width:220px;height:220px;background:#fff;padding:8px;border-radius:8px;display:block;margin:8px 0' }) : null,
+        code,
+        h('div', { style: 'margin-top:8px' },
+          h('button', { class: 'btn small', onclick: async () => { try { await navigator.clipboard.writeText(p.code); } catch { code.select(); document.execCommand('copy'); } toast('Código copiado!', 'ok'); } }, '📋 Copiar código')),
+        h('p', { id: 'paystat', style: 'color:var(--muted)' }, '⏳ Aguardando o pagamento…'));
+      clearInterval(st.payTimer);
+      st.payTimer = setInterval(async () => {
+        try {
+          const c = await api('/api/guilds/' + st.gid + '/premium/payments/' + p.id);
+          if (c.payment.status === 'approved') {
+            clearInterval(st.payTimer);
+            st.data.premium = c.premium;
+            toast('🎉 Pagamento confirmado! Premium ativo.', 'ok');
+            renderTab();
+          } else if (c.payment.status === 'cancelled') {
+            clearInterval(st.payTimer);
+            const el = $('#paystat'); if (el) el.textContent = '⌛ Esse Pix expirou. Gere outro.';
+          }
+        } catch { /* tenta de novo */ }
+      }, 5000);
+    } catch (e) { toast(e.message, 'err'); }
+  }
+  box.append(
+    card('Plano Premium', status,
+      h('ul', { class: 'cl' }, pm.perks.map((x) => h('li', {}, x))),
+      h('p', {}, h('b', {}, 'R$ ' + pm.price.toFixed(2).replace('.', ',')), ' por ' + pm.days + ' dias, pago por Pix. Se renovar antes de acabar, os dias são somados.'),
+      pm.mp ? h('button', { class: 'btn green', onclick: pay }, pm.paid ? '💎 Renovar por Pix' : '💎 Assinar por Pix')
+        : h('div', { class: 'warn' }, 'A cobrança por Pix ainda não foi ativada pelo dono do bot (falta configurar o Mercado Pago).'),
+      payBox));
+  if (st.data.isBotOwner) {
+    const own = h('div', {}, h('p', { style: 'color:var(--muted)' }, 'Carregando servidores…'));
+    box.append(card('🔑 Área do dono do bot', 'Só você vê isto. Dê dias de Premium ou remova de qualquer servidor.', own));
+    (async () => {
+      try {
+        const list = await api('/api/owner/guilds');
+        const o = { guildId: list[0]?.id || '', days: 30 };
+        const rows = h('div', {}, list.map((g) => h('div', { style: 'padding:4px 0' },
+          h('b', {}, g.name), '  ', g.exempt ? '(isento)' : g.free ? '(do dono, grátis)' : g.paid ? '💎 até ' + until(g.until) : 'grátis')));
+        own.replaceChildren(rows,
+          h('div', { class: 'row' }, field('Servidor', sel(o, 'guildId', list.map((g) => ({ v: g.id, t: g.name })), { empty: null })), field('Dias', nInput(o, 'days', 1, 3650))),
+          h('div', {},
+            h('button', { class: 'btn small green', onclick: async () => { try { await api('/api/owner/premium', { method: 'POST', body: { guildId: o.guildId, days: o.days } }); toast('Premium dado!', 'ok'); st.dirty = false; reloadData(false); } catch (e) { toast(e.message, 'err'); } } }, 'Dar dias'),
+            ' ',
+            h('button', { class: 'btn small', onclick: async () => { try { await api('/api/owner/premium', { method: 'POST', body: { guildId: o.guildId, action: 'exempt', on: true } }); toast('Servidor isento de pagamento!', 'ok'); reloadData(false); } catch (e) { toast(e.message, 'err'); } } }, 'Isentar'),
+            ' ',
+            h('button', { class: 'btn small ghost', onclick: async () => { try { await api('/api/owner/premium', { method: 'POST', body: { guildId: o.guildId, action: 'exempt', on: false } }); toast('Isenção removida.', 'ok'); reloadData(false); } catch (e) { toast(e.message, 'err'); } } }, 'Tirar isenção'),
+            ' ',
+            h('button', { class: 'btn small ghost', onclick: async () => { if (!confirm('Remover o Premium desse servidor?')) return; try { await api('/api/owner/premium', { method: 'POST', body: { guildId: o.guildId, action: 'revoke' } }); toast('Premium removido.', 'ok'); reloadData(false); } catch (e) { toast(e.message, 'err'); } } }, 'Remover')));
+      } catch (e) { own.replaceChildren(h('p', {}, e.message)); }
+    })();
+  }
+  return box;
 }
 
 function tabCommands() {
@@ -1050,7 +1203,7 @@ function tabWiki() {
   return box;
 }
 
-const TAB_FN = { home: tabHome, messages: tabMessages, wiki: tabWiki, tickets: tabTickets, autoroles: tabAutoroles, moderation: tabModeration, logs: tabLogs, welcome: () => tabCard('welcome'), leave: () => tabCard('leave'), roles: tabRoles, levels: tabLevels, commands: tabCommands, interaction: tabInteraction, translate: tabTranslate, games: tabGames };
+const TAB_FN = { home: tabHome, messages: tabMessages, wiki: tabWiki, tickets: tabTickets, autoroles: tabAutoroles, moderation: tabModeration, logs: tabLogs, welcome: () => tabCard('welcome'), leave: () => tabCard('leave'), roles: tabRoles, levels: tabLevels, commands: tabCommands, interaction: tabInteraction, translate: tabTranslate, games: tabGames, identity: tabIdentity, premium: tabPremium };
 
 /* ---------- salvar / carregar ---------- */
 async function save() {
@@ -1058,6 +1211,7 @@ async function save() {
   st.cfg = r.config; st.data.config = r.config; st.dirty = false;
   $('#savebar')?.classList.remove('show');
   renderTab(); // religa os campos ao objeto salvo
+  (r.notices || []).forEach((n) => toast('💎 ' + n, 'err'));
   toast('Alterações salvas!', 'ok');
   return r;
 }
@@ -1092,7 +1246,8 @@ function renderTab() {
   const el = $('#tabbody');
   if (!el) return;
   st.onChange = null;
-  el.replaceChildren(TAB_FN[st.tab]());
+  clearInterval(st.payTimer);
+  el.replaceChildren(tabNotice(st.tab), TAB_FN[st.tab]());
   document.querySelectorAll('nav.tabs button').forEach((b) => b.classList.toggle('on', b.dataset.tab === st.tab));
 }
 
