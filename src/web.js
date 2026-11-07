@@ -133,6 +133,12 @@ function startWeb(bot) {
     days: premium.planDays(),
     perks: premium.perkLines(),
     limits: { ticketTypes: premium.perks(gid).ticketTypes, words: premium.perks(gid).words, levelCard: premium.perks(gid).levelCard },
+    features: ['welcomeCard', 'autoroles', 'moderation', 'logs', 'levelCard', 'ticketTranscript', 'duelBoss'].reduce((o, k) => ({ ...o, [k]: !!premium.perks(gid)[k] }), {}),
+    quotas: ['panelPublishes', 'messagePublishes', 'wikiPublishes', 'translationsDay', 'gamesDay'].reduce((o, k) => {
+      const q = premium.quota(gid, k);
+      return { ...o, [k]: { limit: q.limit === Infinity ? null : q.limit, used: q.used, per: q.per } };
+    }, {}),
+    maxPanelButtons: premium.perks(gid).panelButtons,
   });
 
   // Webhook do Mercado Pago (sem login): só reconsulta o pagamento na API deles.
@@ -171,6 +177,7 @@ function startWeb(bot) {
     const gid = String(req.body?.guildId || '');
     if (!client.guilds.cache.has(gid)) return res.status(404).json({ error: 'Servidor não encontrado.' });
     if (req.body?.action === 'revoke') premium.revoke(gid);
+    else if (req.body?.action === 'exempt') premium.setExempt(gid, req.body.on !== false);
     else {
       const d = Math.round(Number(req.body?.days));
       if (!(d >= 1 && d <= 3650)) return res.status(400).json({ error: 'Dias inválidos (1 a 3650).' });
@@ -291,7 +298,10 @@ function startWeb(bot) {
 
   app.post('/api/guilds/:id/wiki/publish-list', requireAuth, guildAccess, wrap(async (req, res) => {
     try {
-      res.json({ ok: true, url: await wiki.publishList(req.guild) });
+      if (!premium.quota(req.guild.id, 'wikiPublishes').ok) return res.status(403).json({ error: premium.quotaMsg(req.guild.id, 'wikiPublishes') });
+      const url = await wiki.publishList(req.guild);
+      premium.consume(req.guild.id, 'wikiPublishes');
+      res.json({ ok: true, url });
     } catch (e) {
       res.status(400).json({ error: e.message });
     }
@@ -305,7 +315,9 @@ function startWeb(bot) {
 
   app.post('/api/guilds/:id/messages/:msgId/publish', requireAuth, guildAccess, wrap(async (req, res) => {
     try {
+      if (!premium.quota(req.guild.id, 'messagePublishes').ok) return res.status(403).json({ error: premium.quotaMsg(req.guild.id, 'messagePublishes') });
       const link = await bot.publishMessage(req.guild.id, req.params.msgId);
+      premium.consume(req.guild.id, 'messagePublishes');
       res.json({ ok: true, url: link });
     } catch (e) {
       res.status(400).json({ error: e.message });
@@ -314,7 +326,9 @@ function startWeb(bot) {
 
   app.post('/api/guilds/:id/panels/:panelId/publish', requireAuth, guildAccess, wrap(async (req, res) => {
     try {
+      if (!premium.quota(req.guild.id, 'panelPublishes').ok) return res.status(403).json({ error: premium.quotaMsg(req.guild.id, 'panelPublishes') });
       const link = await bot.publishPanel(req.guild.id, req.params.panelId);
+      premium.consume(req.guild.id, 'panelPublishes');
       res.json({ ok: true, url: link });
     } catch (e) {
       res.status(400).json({ error: e.message });

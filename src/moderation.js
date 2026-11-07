@@ -3,6 +3,7 @@ const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, MessageFlags } =
 const cfgs = require('./config');
 const db = require('./db');
 const logs = require('./logs');
+const premium = require('./premium');
 
 const EPHEMERAL = MessageFlags.Ephemeral;
 const warn = (where, e) => console.error('[moderacao] erro em ' + where + ':', e?.message || e);
@@ -103,6 +104,10 @@ async function addWarn(guild, user, byId, reason, mod) {
 /* ---------- comandos ---------- */
 async function handleSlash(i, cfgAll) {
   if (!NAMES.has(i.commandName)) return false;
+  if (!premium.perks(i.guild.id).moderation) {
+    await i.reply({ content: premium.LOCK_MSG, flags: EPHEMERAL });
+    return true;
+  }
   const mod = cfgAll.moderation;
   if (!isStaff(i.member, i.guild, mod)) {
     await i.reply({ content: 'Só a equipe de moderação pode usar este comando.', flags: EPHEMERAL });
@@ -239,7 +244,7 @@ async function punish(msg, why, mod, extraIds) {
 async function automod(msg, cfgAll) {
   const mod = cfgAll.moderation;
   const a = mod.automod;
-  if (!a.enabled || !msg.member || msg.author.bot) return false;
+  if (!a.enabled || !msg.member || msg.author.bot || !premium.perks(msg.guild.id).moderation) return false;
   if (a.ignoredChannelIds.includes(msg.channelId)) return false;
   if (isExempt(msg.member, msg.guild, mod)) return false;
 

@@ -573,13 +573,37 @@ function tabLevels() {
       field('Cargos ignorados', multi(l, 'ignoredRoles', roleOpts(), { label: 'adicionar cargo' }))));
 }
 
+/* ---------- avisos do plano grátis (por aba) ---------- */
+function tabNotice(tab) {
+  const pm = st.data.premium;
+  if (!pm || pm.active) return h('span');
+  const q = pm.quotas || {};
+  const use = (k) => (q[k] ? q[k].used + ' de ' + q[k].limit + ' usados' + (q[k].per === 'month' ? ' este mês' : ' hoje') : '');
+  const LOCK = '🔒 Este recurso é exclusivo do plano 💎 Premium. Você pode configurar, mas ele só funciona com o Premium ativo.';
+  const T = {
+    welcome: '💎 No plano grátis o bot envia só a mensagem de texto. O cartão com imagem é Premium.',
+    leave: '💎 No plano grátis o bot envia só a mensagem de texto. O cartão com imagem é Premium.',
+    roles: '💎 Plano grátis: até ' + (pm.maxPanelButtons) + ' botões por painel e ' + (q.panelPublishes ? q.panelPublishes.limit : '') + ' publicações por mês (' + use('panelPublishes') + ').',
+    messages: '💎 Plano grátis: ' + (q.messagePublishes ? q.messagePublishes.limit : '') + ' publicações por mês (' + use('messagePublishes') + ').',
+    wiki: '💎 Plano grátis: ' + (q.wikiPublishes ? q.wikiPublishes.limit : '') + ' publicação da lista por mês (' + use('wikiPublishes') + ').',
+    tickets: '💎 Plano grátis: até ' + pm.limits.ticketTypes + ' tipos de ticket e sem transcrição .txt.',
+    autoroles: LOCK, moderation: LOCK, logs: LOCK,
+    levels: '💎 O cartão de rank no aviso de nível é Premium.',
+    commands: '💎 Plano grátis: até 5 comandos personalizados.',
+    interaction: '💎 Plano grátis: até 5 respostas automáticas e 5 reações automáticas.',
+    translate: '💎 Plano grátis: ' + (q.translationsDay ? q.translationsDay.limit : '') + ' traduções por dia (' + use('translationsDay') + ').',
+    games: '💎 Plano grátis: ' + (q.gamesDay ? q.gamesDay.limit : '') + ' usos de comandos de jogo por dia (' + use('gamesDay') + '). /duelo e /chefe são Premium.',
+  };
+  return T[tab] ? h('div', { class: 'warn' }, T[tab]) : h('span');
+}
+
 function tabPremium() {
   const pm = st.data.premium;
   const until = (ms) => new Date(ms).toLocaleDateString('pt-BR');
   const box = h('div', {});
   const status = pm.paid
     ? '💎 Premium ativo até ' + until(pm.until) + ' (' + pm.daysLeft + ' dia(s))'
-    : pm.free ? '💎 Premium grátis: este servidor é do dono do bot.' : '🔒 Este servidor está no plano grátis.';
+    : pm.free ? '💎 Premium grátis: servidor isento de pagamento.' : '🔒 Este servidor está no plano grátis.';
   const payBox = h('div', { id: 'paybox' });
   async function pay() {
     try {
@@ -626,11 +650,15 @@ function tabPremium() {
         const list = await api('/api/owner/guilds');
         const o = { guildId: list[0]?.id || '', days: 30 };
         const rows = h('div', {}, list.map((g) => h('div', { style: 'padding:4px 0' },
-          h('b', {}, g.name), '  ', g.free ? '(do dono, grátis)' : g.paid ? '💎 até ' + until(g.until) : 'grátis')));
+          h('b', {}, g.name), '  ', g.exempt ? '(isento)' : g.free ? '(do dono, grátis)' : g.paid ? '💎 até ' + until(g.until) : 'grátis')));
         own.replaceChildren(rows,
           h('div', { class: 'row' }, field('Servidor', sel(o, 'guildId', list.map((g) => ({ v: g.id, t: g.name })), { empty: null })), field('Dias', nInput(o, 'days', 1, 3650))),
           h('div', {},
             h('button', { class: 'btn small green', onclick: async () => { try { await api('/api/owner/premium', { method: 'POST', body: { guildId: o.guildId, days: o.days } }); toast('Premium dado!', 'ok'); st.dirty = false; reloadData(false); } catch (e) { toast(e.message, 'err'); } } }, 'Dar dias'),
+            ' ',
+            h('button', { class: 'btn small', onclick: async () => { try { await api('/api/owner/premium', { method: 'POST', body: { guildId: o.guildId, action: 'exempt', on: true } }); toast('Servidor isento de pagamento!', 'ok'); reloadData(false); } catch (e) { toast(e.message, 'err'); } } }, 'Isentar'),
+            ' ',
+            h('button', { class: 'btn small ghost', onclick: async () => { try { await api('/api/owner/premium', { method: 'POST', body: { guildId: o.guildId, action: 'exempt', on: false } }); toast('Isenção removida.', 'ok'); reloadData(false); } catch (e) { toast(e.message, 'err'); } } }, 'Tirar isenção'),
             ' ',
             h('button', { class: 'btn small ghost', onclick: async () => { if (!confirm('Remover o Premium desse servidor?')) return; try { await api('/api/owner/premium', { method: 'POST', body: { guildId: o.guildId, action: 'revoke' } }); toast('Premium removido.', 'ok'); reloadData(false); } catch (e) { toast(e.message, 'err'); } } }, 'Remover')));
       } catch (e) { own.replaceChildren(h('p', {}, e.message)); }
@@ -1160,7 +1188,7 @@ function renderTab() {
   if (!el) return;
   st.onChange = null;
   clearInterval(st.payTimer);
-  el.replaceChildren(TAB_FN[st.tab]());
+  el.replaceChildren(tabNotice(st.tab), TAB_FN[st.tab]());
   document.querySelectorAll('nav.tabs button').forEach((b) => b.classList.toggle('on', b.dataset.tab === st.tab));
 }
 

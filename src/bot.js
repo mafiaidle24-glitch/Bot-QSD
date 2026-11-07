@@ -153,7 +153,7 @@ async function sendCard(kind, guild, who) {
     content: fmt(cfg.message, { member, user, guild }) || undefined,
     allowedMentions: kind === 'welcome' ? { users: [user.id], roles: [] } : { parse: [] },
   };
-  if (cfg.useImage) {
+  if (cfg.useImage && premium.perks(guild.id).welcomeCard) {
     const buf = await renderCard({
       ...cfg,
       kind,
@@ -170,7 +170,7 @@ client.on(Events.GuildMemberAdd, async (member) => {
   try {
     const all = cfgs.getConfig(member.guild.id);
     const cfg = all.welcome;
-    const autoIds = member.user.bot ? all.autoroles.botRoleIds : [...new Set([...all.autoroles.memberRoleIds, ...cfg.autoRoleIds])];
+    const autoIds = !premium.perks(member.guild.id).autoroles ? [] : member.user.bot ? all.autoroles.botRoleIds : [...new Set([...all.autoroles.memberRoleIds, ...cfg.autoRoleIds])];
     if (autoIds.length) {
       const ids = autoIds.filter((id) => member.guild.roles.cache.has(id));
       if (ids.length) await member.roles.add(ids, 'Cargo automático de boas-vindas').catch((e) => warn('cargo automático', e));
@@ -414,6 +414,7 @@ async function handleTranslate(msg, cfg) {
   const text = msg.cleanContent.trim();
   if (text.length < 2 || /^(https?:\/\/\S+\s*)+$/.test(text)) return;
   if (cfg.commands.prefix && text.startsWith(cfg.commands.prefix)) return;
+  if (!premium.consume(msg.guild.id, 'translationsDay')) return;
   const lines = [];
   for (const target of rule.targets) {
     try {
@@ -446,6 +447,7 @@ client.on(Events.MessageReactionAdd, async (reaction, user) => {
     if (!text) return dbg('ignorado: mensagem sem texto');
     if (onCooldown('flag:' + msg.id + ':' + lang, 8000)) return dbg('ignorado: cooldown');
     dbg('traduzindo para ' + lang);
+    const noQuota = !premium.consume(msg.guild.id, 'translationsDay');
 
     // Aviso curto que some sozinho (para a pessoa saber que o bot viu a bandeira).
     const note = async (content) => {
@@ -453,6 +455,11 @@ client.on(Events.MessageReactionAdd, async (reaction, user) => {
       if (m) setTimeout(() => m.delete().catch(() => {}), 7000);
     };
 
+    if (noQuota) {
+      const m = await msg.reply({ content: '🔒 ' + premium.quotaMsg(msg.guild.id, 'translationsDay'), allowedMentions: { parse: [], repliedUser: false } }).catch(() => null);
+      if (m) setTimeout(() => m.delete().catch(() => {}), 7000);
+      return;
+    }
     let r;
     try {
       r = await translate(text, lang);
@@ -552,6 +559,10 @@ function gameAllowed(i) {
   }
   if (g.channelId && g.channelId !== i.channelId) {
     i.reply({ content: 'Os jogos só funcionam em <#' + g.channelId + '>.', flags: EPHEMERAL });
+    return false;
+  }
+  if (!premium.consume(i.guild.id, 'gamesDay')) {
+    i.reply({ content: '🔒 ' + premium.quotaMsg(i.guild.id, 'gamesDay'), flags: EPHEMERAL });
     return false;
   }
   return true;
@@ -731,6 +742,7 @@ async function runSlash(i) {
       });
     }
     case 'traduzir': {
+      if (!premium.consume(i.guild.id, 'translationsDay')) return i.reply({ content: '🔒 ' + premium.quotaMsg(i.guild.id, 'translationsDay'), flags: EPHEMERAL });
       await i.deferReply();
       try {
         const r = await translate(i.options.getString('texto'), i.options.getString('idioma'));

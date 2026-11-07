@@ -548,6 +548,11 @@ function applyLimits(guildId, clean) {
   if (types && types.length > pk.ticketTypes) { types.length = pk.ticketTypes; notes.push('Tickets: o plano grátis permite ' + pk.ticketTypes + ' tipos (os extras não foram salvos).'); }
   const words = clean.moderation?.automod?.words?.list;
   if (words && words.length > pk.words) { words.length = pk.words; notes.push('Automod: o plano grátis permite ' + pk.words + ' palavras proibidas (as extras não foram salvas).'); }
+  const cap = (list, n, what) => { if (Array.isArray(list) && list.length > n) { list.length = n; notes.push(what + ': o plano grátis permite ' + n + ' (os extras não foram salvos).'); } };
+  for (const p of clean.panels || []) cap(p.buttons, pk.panelButtons, 'Painel de cargos "' + (p.name || p.title || 'sem nome') + '" botões');
+  cap(clean.commands?.list, pk.customCommands, 'Comandos personalizados');
+  cap(clean.interaction?.triggers, pk.triggers, 'Respostas automáticas');
+  cap(clean.interaction?.reactions, pk.reactions, 'Reações automáticas');
   if (clean.levels && clean.levels.announceStyle === 'card' && !pk.levelCard) { clean.levels.announceStyle = 'text'; notes.push('O cartão no aviso de nível é um recurso Premium.'); }
   return notes;
 }

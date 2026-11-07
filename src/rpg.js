@@ -552,6 +552,10 @@ async function handleSlash(i, helpers) {
     await i.reply({ embeds: [profileEmbed(p, i.user, '🕴️ Bem-vindo ao submundo! Lute, junte grana e compre equipamentos.')], components: menuRows(i.user.id), flags: EPHEMERAL });
     return true;
   }
+  if ((i.commandName === 'duelo' || i.commandName === 'chefe') && !premium.perks(i.guild.id).duelBoss) {
+    await i.reply({ content: premium.LOCK_MSG + ' (duelos e chefão semanal)', flags: EPHEMERAL });
+    return true;
+  }
   if (i.commandName === 'duelo') { await duelStart(i); return true; }
   if (i.commandName === 'chefe') {
     const p = player(i.guild.id, i.user.id);
@@ -605,11 +609,13 @@ async function handleButton(i) {
       return i.update(bizView(p, uid, '💰 Você coletou **' + money(n) + '**!'));
     }
     case 'boss': {
+      if (!premium.perks(i.guild.id).duelBoss) return back(premium.LOCK_MSG + ' (chefão semanal)');
       const { boss, escaped } = ensureBoss(i.guild.id);
       await announceEscaped(i.channel, escaped);
       return i.update(bossView(p, uid, boss, undefined, i.guild.id));
     }
     case 'bossatk': {
+      if (!premium.perks(i.guild.id).duelBoss) return back(premium.LOCK_MSG + ' (chefão semanal)');
       const { boss, escaped } = ensureBoss(i.guild.id);
       await announceEscaped(i.channel, escaped);
       const r = bossAttack(p, uid, boss, i.guild.id);

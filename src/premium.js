@@ -15,6 +15,9 @@ const commands = [
       .addStringOption((o) => o.setName('servidor').setDescription('ID do servidor (vazio = este)')))
     .addSubcommand((s) => s.setName('remover').setDescription('Tirar o Premium')
       .addStringOption((o) => o.setName('servidor').setDescription('ID do servidor (vazio = este)')))
+    .addSubcommand((s) => s.setName('isentar').setDescription('Isentar um servidor de pagamento (tem tudo do Premium)')
+      .addStringOption((o) => o.setName('servidor').setDescription('ID do servidor (vazio = este)'))
+      .addBooleanOption((o) => o.setName('ativar').setDescription('Sim = isentar, Não = tirar a isenção (padrão: sim)')))
     .addSubcommand((s) => s.setName('ver').setDescription('Listar os servidores com Premium')),
 ];
 const NAMES = new Set(commands.map((c) => c.name));
@@ -33,17 +36,38 @@ const money = (n) => 'R$ ' + Number(n).toFixed(2).replace('.', ',');
 const mpOn = () => !!process.env.MP_ACCESS_TOKEN;
 const MP_URL = () => (process.env.MP_API_URL || 'https://api.mercadopago.com').replace(/\/$/, '');
 
-/** Vantagens do plano. É aqui que você ajusta números. */
+/** Vantagens do plano. É aqui que você ajusta números. Infinity = sem limite. */
 const PERKS = {
   chatXp: 1.25,        // +25% de XP nas mensagens
   rpgCash: 1.25,       // +25% de dinheiro nas lutas do RPG
   rpgXp: 1.25,         // +25% de XP nas lutas
   bossTries: 5,        // tentativas diárias no chefão (grátis: 3)
-  ticketTypes: 10,     // tipos de ticket (grátis: 3)
-  words: 200,          // palavras proibidas no automod (grátis: 30)
+  ticketTypes: 10,     // tipos de ticket
+  words: 200,          // palavras proibidas no automod
   levelCard: true,     // cartão de rank no aviso de novo nível
+  welcomeCard: true,   // cartão personalizado nas boas-vindas e saída
+  autoroles: true,     // cargos automáticos
+  moderation: true,    // comandos de moderação + automod
+  logs: true,          // logs do servidor
+  ticketTranscript: true, // transcrição .txt ao fechar ticket
+  duelBoss: true,      // /duelo e /chefe
+  panelButtons: 25,    // botões por painel de cargos
+  panelPublishes: Infinity,   // publicações de painel de cargos por mês
+  messagePublishes: Infinity, // publicações de mensagens/embeds por mês
+  wikiPublishes: Infinity,    // publicações da lista da wiki por mês
+  customCommands: 100, // comandos personalizados
+  triggers: 100,       // respostas automáticas
+  reactions: 100,      // reações automáticas
+  translationsDay: Infinity,  // traduções por dia
+  gamesDay: Infinity,  // usos de comandos de mini jogo por dia
 };
-const FREE = { chatXp: 1, rpgCash: 1, rpgXp: 1, bossTries: 3, ticketTypes: 3, words: 30, levelCard: false };
+const FREE = {
+  chatXp: 1, rpgCash: 1, rpgXp: 1, bossTries: 3, ticketTypes: 3, words: 30, levelCard: false,
+  welcomeCard: false, autoroles: false, moderation: false, logs: false, ticketTranscript: false, duelBoss: false,
+  panelButtons: 3, panelPublishes: 2, messagePublishes: 2, wikiPublishes: 1,
+  customCommands: 5, triggers: 5, reactions: 5, translationsDay: 20, gamesDay: 30,
+};
+const lim = (n) => (n === Infinity ? 'ilimitado' : String(n));
 
 let client = null;
 function init(c) {
@@ -55,14 +79,15 @@ function init(c) {
 
 const store = () => db.data.premium;
 const ownerGuild = (gid) => !!(process.env.OWNER_ID && client?.guilds.cache.get(gid)?.ownerId === process.env.OWNER_ID);
+const exemptGuild = (gid) => !!store().guilds[gid]?.exempt;
 
 /** { active, free, until, daysLeft } */
 function info(gid) {
   const rec = store().guilds[gid];
   const until = rec?.until || 0;
   const paid = until > Date.now();
-  const free = ownerGuild(gid);
-  return { active: paid || free, free, paid, until, daysLeft: paid ? Math.ceil((until - Date.now()) / DAY) : 0 };
+  const free = ownerGuild(gid) || exemptGuild(gid);
+  return { active: paid || free, free, paid, exempt: exemptGuild(gid), until, daysLeft: paid ? Math.ceil((until - Date.now()) / DAY) : 0 };
 }
 const isPremium = (gid) => info(gid).active;
 const perks = (gid) => (isPremium(gid) ? PERKS : FREE);
@@ -76,25 +101,72 @@ function grant(gid, days, by = 'manual') {
   return rec.until;
 }
 function revoke(gid) {
-  delete store().guilds[gid];
+  const rec = store().guilds[gid];
+  if (rec?.exempt) { rec.until = 0; delete rec.by; } else delete store().guilds[gid];
   db.save();
 }
+/** Servidor isento: tem tudo do Premium sem pagar (escolhido pelo dono do bot). */
+function setExempt(gid, on) {
+  const rec = (store().guilds[gid] ??= { until: 0 });
+  if (on) rec.exempt = true; else delete rec.exempt;
+  if (!on && !(rec.until > 0)) delete store().guilds[gid];
+  db.save();
+}
+
+/* ---- cotas de uso (por mês ou por dia, fuso de São Paulo) ---- */
+const PERIOD = { panelPublishes: 'month', messagePublishes: 'month', wikiPublishes: 'month', translationsDay: 'day', gamesDay: 'day' };
+function periodKey(kind) {
+  const d = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }); // AAAA-MM-DD
+  return kind === 'month' ? d.slice(0, 7) : d;
+}
+function usageRec(gid, key) {
+  const u = ((store().usage ??= {})[gid] ??= {});
+  const per = periodKey(PERIOD[key]);
+  if (!u[key] || u[key].p !== per) u[key] = { p: per, n: 0 };
+  return u[key];
+}
+/** { limit, used, left, ok } de uma cota. */
+function quota(gid, key) {
+  const limit = perks(gid)[key];
+  const used = usageRec(gid, key).n;
+  return { limit, used, left: limit === Infinity ? Infinity : Math.max(0, limit - used), ok: limit === Infinity || used < limit, per: PERIOD[key] };
+}
+/** Gasta 1 uso. Devolve false (sem gastar) se a cota acabou. */
+function consume(gid, key) {
+  const q = quota(gid, key);
+  if (!q.ok) return false;
+  if (q.limit !== Infinity) { usageRec(gid, key).n++; db.save(); }
+  return true;
+}
+const QUOTA_NAME = { panelPublishes: 'publicações de painéis de cargos', messagePublishes: 'publicações de mensagens', wikiPublishes: 'publicações da lista da wiki', translationsDay: 'traduções', gamesDay: 'usos de mini jogos' };
+/** Texto de aviso quando a cota acabou. */
+function quotaMsg(gid, key) {
+  const q = quota(gid, key);
+  return 'Limite do plano grátis atingido: ' + q.limit + ' ' + QUOTA_NAME[key] + (q.per === 'month' ? ' por mês' : ' por dia') + '. Volte ' + (q.per === 'month' ? 'no mês que vem' : 'amanhã') + ' ou assine o 💎 Premium.';
+}
+const LOCK_MSG = '🔒 Este recurso é exclusivo do plano 💎 Premium. Veja /premium.';
+
 
 const fmtDate = (ms) => new Date(ms).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
 function statusLine(gid) {
   const s = info(gid);
-  if (s.free && !s.paid) return '💎 **Premium grátis** (servidor do dono do bot)';
+  if (s.free && !s.paid) return '💎 **Premium grátis** (servidor isento)';
   if (s.paid) return '💎 **Premium ativo** até **' + fmtDate(s.until) + '** (' + s.daysLeft + ' dia(s))';
   return '🔒 Este servidor está no plano **grátis**.';
 }
 function perkLines() {
   return [
-    '⭐ +' + Math.round((PERKS.chatXp - 1) * 100) + '% de XP nas mensagens',
-    '🕴️ RPG: +' + Math.round((PERKS.rpgCash - 1) * 100) + '% de dinheiro e XP nas lutas, ' + PERKS.bossTries + ' ataques por dia no chefão (grátis: ' + FREE.bossTries + ')',
-    '🖼️ Cartão de rank no aviso de novo nível',
-    '🎫 Até ' + PERKS.ticketTypes + ' tipos de ticket (grátis: ' + FREE.ticketTypes + ')',
-    '🔨 Até ' + PERKS.words + ' palavras proibidas no automod (grátis: ' + FREE.words + ')',
-    '🚀 Recursos novos exclusivos (alertas de YouTube/Twitch, estatísticas…) quando chegarem',
+    '👋 Boas-vindas e saída com cartão personalizado (grátis: só mensagem)',
+    '🎛️ Painéis de cargos: ' + PERKS.panelButtons + ' botões por painel e publicações ilimitadas (grátis: ' + FREE.panelButtons + ' botões, ' + FREE.panelPublishes + ' publicações/mês)',
+    '📨 Mensagens e embeds ilimitados (grátis: ' + FREE.messagePublishes + ' publicações/mês)',
+    '📖 Wiki de Capos: publicações ilimitadas (grátis: ' + FREE.wikiPublishes + '/mês)',
+    '🎫 Até ' + PERKS.ticketTypes + ' tipos de ticket e transcrição (grátis: ' + FREE.ticketTypes + ' tipos, sem transcrição)',
+    '🏷️ Autoroles, 🔨 Moderação com automod e 📜 Logs (exclusivos Premium)',
+    '⭐ +' + Math.round((PERKS.chatXp - 1) * 100) + '% de XP e cartão de rank no aviso de nível',
+    '⌨️ Comandos personalizados e 💬 interação: até ' + PERKS.customCommands + ' de cada (grátis: ' + FREE.customCommands + ')',
+    '🌐 Traduções ilimitadas (grátis: ' + FREE.translationsDay + ' por dia)',
+    '🎮 Mini jogos ilimitados (grátis: ' + FREE.gamesDay + ' usos por dia)',
+    '🕴️ RPG: +' + Math.round((PERKS.rpgCash - 1) * 100) + '% de dinheiro e XP, ' + PERKS.bossTries + ' ataques/dia no chefão, /duelo e /chefe (grátis: sem duelo e chefão)',
   ];
 }
 
@@ -232,9 +304,13 @@ async function handleSlash(i) {
   const sub = i.options.getSubcommand();
   const gid = (i.options.getString('servidor') || i.guild.id).trim();
   if (sub === 'ver') {
-    const rows = Object.entries(store().guilds).filter(([, r]) => r.until > Date.now())
-      .map(([id, r]) => '• ' + (client.guilds.cache.get(id)?.name || id) + ' — até ' + fmtDate(r.until));
-    await i.reply({ content: rows.length ? '**Servidores com Premium pago:**\n' + rows.join('\n') : 'Nenhum servidor com Premium pago agora.', flags: EPHEMERAL });
+    const rows = Object.entries(store().guilds).filter(([, r]) => r.until > Date.now() || r.exempt)
+      .map(([id, r]) => '• ' + (client.guilds.cache.get(id)?.name || id) + (r.exempt ? ' — isento' : '') + (r.until > Date.now() ? ' — até ' + fmtDate(r.until) : ''));
+    await i.reply({ content: rows.length ? '**Servidores com Premium:**\n' + rows.join('\n') : 'Nenhum servidor com Premium (além dos seus) agora.', flags: EPHEMERAL });
+  } else if (sub === 'isentar') {
+    const on = i.options.getBoolean('ativar') !== false;
+    setExempt(gid, on);
+    await i.reply({ content: (on ? '✅ **' : '🗑️ Isenção removida de **') + (client.guilds.cache.get(gid)?.name || gid) + (on ? '** agora é isento de pagamento.' : '**.'), flags: EPHEMERAL });
   } else if (sub === 'dar') {
     const until = grant(gid, i.options.getInteger('dias'), 'admin');
     await i.reply({ content: '✅ Premium de **' + (client.guilds.cache.get(gid)?.name || gid) + '** vai até **' + fmtDate(until) + '**.', flags: EPHEMERAL });
@@ -271,7 +347,7 @@ async function handleButton(i) {
 }
 
 module.exports = {
-  commands, handleSlash, handleButton, init, info, isPremium, perks, grant, revoke, statusLine, perkLines,
+  commands, handleSlash, handleButton, init, info, isPremium, perks, grant, revoke, setExempt, quota, consume, quotaMsg, LOCK_MSG, lim, statusLine, perkLines,
   mpOn, price, planDays, money, createPayment, checkPayment, handleWebhook, publicPayment, pollPending,
   PERKS, FREE, store, fmtDate,
 };
