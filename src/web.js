@@ -272,7 +272,7 @@ function startWeb(bot) {
   // Envio de imagens do celular/computador (corpo = bytes da imagem)
   app.post('/api/guilds/:id/uploads', requireAuth, guildAccess, express.raw({ type: '*/*', limit: uploads.MAX }), async (req, res) => {
     try {
-      if (!Buffer.isBuffer(req.body) || !req.body.length) return res.status(400).json({ error: 'Nenhuma imagem recebida (máx. 8 MB).' });
+      if (!Buffer.isBuffer(req.body) || !req.body.length) return res.status(400).json({ error: 'Nenhuma imagem recebida (máx. 16 MB).' });
       const buf = req.query.round === '1' ? await uploads.round(req.body) : req.body;
       res.json({ ref: uploads.save(req.guild.id, buf) });
     } catch (e) {
@@ -373,7 +373,7 @@ function startWeb(bot) {
   }));
 
   // Emojis e figurinhas do servidor (nomeados qsd_01, qsd_02...)
-  app.post('/api/guilds/:id/expressions/:type', requireAuth, guildAccess, express.raw({ type: '*/*', limit: uploads.MAX }), async (req, res) => {
+  app.post('/api/guilds/:id/expressions/:type', requireAuth, guildAccess, express.raw({ type: '*/*', limit: 16 * 1024 * 1024 }), async (req, res) => {
     try {
       const type = req.params.type;
       if (!['emoji', 'sticker'].includes(type)) return res.status(400).json({ error: 'Tipo inválido.' });
