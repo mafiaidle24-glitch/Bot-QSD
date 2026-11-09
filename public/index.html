@@ -1244,12 +1244,12 @@ function tabExpressions() {
   }
   setTimeout(loadList, 0);
   const pick = (type) => {
-    const f = h('input', { type: 'file', accept: 'image/png,image/jpeg,image/gif,image/webp', multiple: true, style: 'display:none' });
+    const f = h('input', { type: 'file', accept: 'image/png,image/jpeg,image/gif,image/webp,video/mp4,video/webm', multiple: true, style: 'display:none' });
     f.addEventListener('change', async () => {
       const list = Array.from(f.files || []);
       let ok = 0; const fails = [], notes = [];
       for (let i = 0; i < list.length; i++) {
-        log.replaceChildren(h('p', {}, '⏳ Enviando e ajustando ' + (i + 1) + ' de ' + list.length + '… (GIFs grandes levam alguns segundos)'));
+        log.replaceChildren(h('p', {}, '⏳ Enviando e ajustando ' + (i + 1) + ' de ' + list.length + '… (GIFs e vídeos levam alguns segundos)'));
         try {
           if (list[i].size > 16 * 1024 * 1024) throw new Error('arquivo grande demais (máx. 16 MB)');
           const r = await fetch('/api/guilds/' + st.gid + '/expressions/' + type, { method: 'POST', credentials: 'same-origin',
@@ -1271,7 +1271,7 @@ function tabExpressions() {
     });
     f.click();
   };
-  return card('😀 Emojis e figurinhas do servidor', 'Escolha várias imagens: o bot cria tudo no seu servidor, nomeando qsd_01, qsd_02… em ordem. Imagens e GIFs grandes são reduzidos automaticamente (GIF até 16 MB), e o GIF continua animado.',
+  return card('😀 Emojis e figurinhas do servidor', 'Escolha várias imagens: o bot cria tudo no seu servidor, nomeando qsd_01, qsd_02… em ordem. Imagens e GIFs grandes são reduzidos automaticamente (GIF até 16 MB), e o GIF continua animado. Também aceita vídeo curto (MP4/WebM): vira GIF com os primeiros 6 segundos.',
     h('div', { class: 'dbtns' },
       h('button', { class: 'btn', onclick: () => pick('emoji') }, '😀 Importar emojis'),
       h('button', { class: 'btn', onclick: () => pick('sticker') }, '🖼️ Importar figurinhas')),
