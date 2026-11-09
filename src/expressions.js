@@ -1,6 +1,9 @@
 // Emojis e figurinhas do servidor, nomeados qsd_01, qsd_02...
 const { PermissionFlagsBits } = require('discord.js');
 const { createCanvas, loadImage } = require('@napi-rs/canvas');
+const gifcompress = require('./gifcompress');
+
+const fmtSize = (n) => (n >= 1024 * 1024 ? (n / 1024 / 1024).toFixed(1).replace('.', ',') + ' MB' : Math.round(n / 1024) + ' KB');
 
 const LIM = { emoji: { max: 256 * 1024, size: 128 }, sticker: { max: 512 * 1024, size: 320 } };
 const isGif = (b) => b.length > 6 && b.toString('latin1', 0, 4) === 'GIF8';
@@ -41,14 +44,25 @@ async function add(guild, type, buf) {
   await (type === 'sticker' ? guild.stickers : guild.emojis).fetch();
   const gif = isGif(buf);
   const lim = LIM[type];
-  const file = gif ? buf : await toPng(buf, lim.size);
+  let file = buf, note = '';
+  if (gif) {
+    // GIF grande demais (ou figurinha que não é 320x320): reduz e comprime sozinho
+    const d = gifcompress.dims(buf);
+    if (buf.length > lim.max || (type === 'sticker' && (d.w !== lim.size || d.h !== lim.size))) {
+      try {
+        const r = await gifcompress.compress(buf, { max: lim.max, size: lim.size, fixedSize: type === 'sticker' });
+        file = r.buffer;
+        note = 'GIF reduzido de ' + fmtSize(r.before) + ' para ' + fmtSize(r.after) + (r.trimmed ? ' (duração encurtada para caber)' : '');
+      } catch (e) { throw new Error(e.message); }
+    }
+  } else file = await toPng(buf, lim.size);
   if (file.length > lim.max) throw new Error((gif ? 'GIF' : 'imagem') + ' acima de ' + lim.max / 1024 + ' KB');
   const name = nextName(guild, type);
   try {
     if (type === 'emoji') await guild.emojis.create({ attachment: file, name, reason: 'Painel do bot' });
     else await guild.stickers.create({ file: { attachment: file, name: name + (gif ? '.gif' : '.png') }, name, tags: 'grinning', reason: 'Painel do bot' });
   } catch (e) { throw new Error(explain(e)); }
-  return { name, animated: gif };
+  return { name, animated: gif, note };
 }
 
 const NAME = /^qsd_\d+$/;
