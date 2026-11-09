@@ -1247,16 +1247,17 @@ function tabExpressions() {
     const f = h('input', { type: 'file', accept: 'image/png,image/jpeg,image/gif,image/webp', multiple: true, style: 'display:none' });
     f.addEventListener('change', async () => {
       const list = Array.from(f.files || []);
-      let ok = 0; const fails = [];
+      let ok = 0; const fails = [], notes = [];
       for (let i = 0; i < list.length; i++) {
-        log.replaceChildren(h('p', {}, '⏳ Enviando ' + (i + 1) + ' de ' + list.length + '…'));
+        log.replaceChildren(h('p', {}, '⏳ Enviando e ajustando ' + (i + 1) + ' de ' + list.length + '… (GIFs grandes levam alguns segundos)'));
         try {
-          if (list[i].size > 8 * 1024 * 1024) throw new Error('arquivo grande demais');
+          if (list[i].size > 16 * 1024 * 1024) throw new Error('arquivo grande demais (máx. 16 MB)');
           const r = await fetch('/api/guilds/' + st.gid + '/expressions/' + type, { method: 'POST', credentials: 'same-origin',
             headers: { 'Content-Type': 'application/octet-stream' }, body: await list[i].arrayBuffer() });
           const j = await r.json().catch(() => ({}));
           if (!r.ok) throw new Error(j.error || 'Erro ' + r.status);
           ok++;
+          if (j.note) notes.push(list[i].name + ': ' + j.note);
         } catch (e) {
           fails.push(list[i].name + ': ' + e.message);
           if (/^Limite|^O bot precisa/.test(e.message)) break;
@@ -1264,12 +1265,13 @@ function tabExpressions() {
       }
       log.replaceChildren(
         h('p', {}, '✅ ' + ok + ' criado(s) de ' + list.length + '.'),
+        notes.map((x) => h('p', { style: 'color:var(--muted)' }, '🗜️ ' + x)),
         fails.map((x) => h('p', { style: 'color:#ff8a8a' }, '⚠️ ' + x)));
       loadList();
     });
     f.click();
   };
-  return card('😀 Emojis e figurinhas do servidor', 'Escolha várias imagens: o bot cria tudo no seu servidor, nomeando qsd_01, qsd_02… em ordem. GIF vira animado.',
+  return card('😀 Emojis e figurinhas do servidor', 'Escolha várias imagens: o bot cria tudo no seu servidor, nomeando qsd_01, qsd_02… em ordem. Imagens e GIFs grandes são reduzidos automaticamente (GIF até 16 MB), e o GIF continua animado.',
     h('div', { class: 'dbtns' },
       h('button', { class: 'btn', onclick: () => pick('emoji') }, '😀 Importar emojis'),
       h('button', { class: 'btn', onclick: () => pick('sticker') }, '🖼️ Importar figurinhas')),
