@@ -19,6 +19,7 @@ const minigames = require('./minigames');
 const rpg = require('./rpg');
 const premium = require('./premium');
 const identity = require('./identity');
+const diagnostico = require('./diagnostico');
 
 const EPHEMERAL = MessageFlags.Ephemeral;
 const BASE_URL = (process.env.BASE_URL || 'http://localhost:3000').replace(/\/$/, '');
@@ -696,6 +697,7 @@ const slashCommands = [
   ...minigames.commands,
   ...rpg.commands,
   ...premium.commands,
+  ...diagnostico.commands,
 ].map((c) => c.setDMPermission(false).toJSON());
 
 async function registerCommands(guild) {
@@ -713,6 +715,7 @@ async function runSlash(i) {
   if (await minigames.handleSlash(i, { gameAllowed, reward })) return;
   if (await rpg.handleSlash(i, { gameAllowed })) return;
   if (await premium.handleSlash(i)) return;
+  if (await diagnostico.handleSlash(i)) return;
   switch (i.commandName) {
     case 'rank': {
       if (!cfg.levels.enabled) return i.reply({ content: 'O sistema de níveis está desativado.', flags: EPHEMERAL });
@@ -849,6 +852,7 @@ client.once(Events.ClientReady, async () => {
   nextStatus();
   setInterval(nextStatus, 45_000).unref?.();
   premium.init(client);
+  setTimeout(() => diagnostico.logStartup(), 5_000);
   setTimeout(() => identity.sweep(client), 20_000);
   setInterval(() => identity.sweep(client), 10 * 60_000).unref?.();
   for (const guild of client.guilds.cache.values()) await registerCommands(guild);
