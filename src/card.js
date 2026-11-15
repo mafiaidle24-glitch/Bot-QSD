@@ -4,6 +4,7 @@ const path = require('path');
 const dns = require('dns').promises;
 const net = require('net');
 const { createCanvas, loadImage, GlobalFonts } = require('@napi-rs/canvas');
+const uploads = require('./uploads');
 
 // Fonte opcional: coloque um .ttf em assets/font.ttf (útil em hospedagens sem fontes instaladas).
 const customFont = path.join(__dirname, '..', 'assets', 'font.ttf');
@@ -76,7 +77,7 @@ function drawText(ctx, text, x, y, { size, color, weight = 'bold', maxW = 900, a
 
 function defaultBackground(ctx, W, H, kind) {
   const stops =
-    kind === 'leave'
+    kind === 'leave' || kind === 'kick'
       ? ['#1b1b2f', '#3a2f4f', '#7a3b4f', '#c0654f']
       : ['#2a2358', '#6b3fa0', '#e0589a', '#f7a072'];
   const g = ctx.createLinearGradient(0, 0, 0, H);
@@ -120,7 +121,12 @@ async function renderCard(o) {
   const canvas = createCanvas(W, H);
   const ctx = canvas.getContext('2d');
 
-  const bg = await fetchImage(o.bgUrl);
+  let bg = null;
+  if (uploads.REF.test(String(o.bgUrl || ''))) {
+    // fundo enviado do aparelho pelo painel
+    const p = o.guildId ? uploads.resolve(o.guildId, o.bgUrl) : null;
+    if (p) bg = await loadImage(fs.readFileSync(p)).catch(() => null);
+  } else bg = await fetchImage(o.bgUrl);
   if (bg) cover(ctx, bg, W, H);
   else defaultBackground(ctx, W, H, o.kind);
 

@@ -1,6 +1,6 @@
 const {
   Client, GatewayIntentBits, Partials, Events, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle,
-  AttachmentBuilder, PermissionFlagsBits, SlashCommandBuilder, REST, Routes, MessageFlags,
+  AttachmentBuilder, PermissionFlagsBits, AuditLogEvent, SlashCommandBuilder, REST, Routes, MessageFlags,
 } = require('discord.js');
 const crypto = require('crypto');
 const fs = require('fs');
@@ -56,7 +56,7 @@ const warn = (where, e) => console.error('[bot] erro em ' + where + ':', e?.mess
 
 function fmt(tpl, v) {
   const user = v.user || v.member?.user;
-  return String(tpl || '').replace(/\{(user|username|displayname|server|count|id|args|channel|level)\}/gi, (_, k) => {
+  return String(tpl || '').replace(/\{(user|username|displayname|server|count|id|args|channel|level|reason|moderator)\}/gi, (_, k) => {
     switch (k.toLowerCase()) {
       case 'user': return user ? '<@' + user.id + '>' : '';
       case 'username': return user?.username ?? '';
@@ -67,6 +67,8 @@ function fmt(tpl, v) {
       case 'args': return v.args ?? '';
       case 'channel': return v.channel ? '<#' + v.channel.id + '>' : '';
       case 'level': return String(v.level ?? '');
+      case 'reason': return v.reason ?? '';
+      case 'moderator': return v.moderator ?? '';
       default: return '';
     }
   });
@@ -145,20 +147,21 @@ async function giveXp(guild, member, amount, channel) {
   await target.send(payload).catch((e) => warn('anúncio de nível', e));
 }
 
-async function sendCard(kind, guild, who) {
+async function sendCard(kind, guild, who, extra = {}) {
   const cfg = cfgs.getConfig(guild.id)[kind];
   const user = who.user || who;
   const member = who.user ? who : null;
   const channel = cfg.channelId ? await guild.channels.fetch(cfg.channelId).catch(() => null) : null;
   if (!channel || !channel.isTextBased()) throw new Error('Escolha um canal válido (que o bot consiga ver) para essa mensagem.');
   const payload = {
-    content: fmt(cfg.message, { member, user, guild }) || undefined,
+    content: fmt(cfg.message, { member, user, guild, ...extra }) || undefined,
     allowedMentions: kind === 'welcome' ? { users: [user.id], roles: [] } : { parse: [] },
   };
   if (cfg.useImage && premium.perks(guild.id).welcomeCard) {
     const buf = await renderCard({
       ...cfg,
       kind,
+      guildId: guild.id,
       name: nameOf(member, user),
       avatarUrl: avatarOf(user),
     });
@@ -187,10 +190,28 @@ client.on(Events.GuildMemberAdd, async (member) => {
   }
 });
 
+/** Descobre pelo registro de auditoria se o membro que saiu foi expulso. Devolve { reason, moderator } ou null. */
+async function findKick(member) {
+  const guild = member.guild;
+  if (!guild.members.me?.permissions.has(PermissionFlagsBits.ViewAuditLog)) return null;
+  await new Promise((r) => setTimeout(r, 1500)); // o registro demora um instante para aparecer
+  const logs = await guild.fetchAuditLogs({ type: AuditLogEvent.MemberKick, limit: 8 });
+  const e = logs.entries.find((x) => x.target?.id === member.id && Date.now() - x.createdTimestamp < 20000);
+  if (!e) return null;
+  let reason = e.reason || '';
+  let moderator = e.executor?.username || '';
+  const m = /\s*\(por (.+)\)\s*$/.exec(reason); // /expulsar do bot grava "(por quem)"
+  if (m) { moderator = m[1]; reason = reason.slice(0, m.index); }
+  return { reason: reason.trim() || 'Sem motivo informado', moderator: moderator || 'a equipe' };
+}
+
 client.on(Events.GuildMemberRemove, async (member) => {
   try {
-    const cfg = cfgs.getConfig(member.guild.id).leave;
-    if (cfg.enabled) await sendCard('leave', member.guild, member).catch((e) => warn('saída', e));
+    const all = cfgs.getConfig(member.guild.id);
+    // Expulsão: se o membro foi expulso, vale a mensagem de expulsão (no lugar da de saída).
+    const kick = all.kick.enabled ? await findKick(member).catch((e) => { warn('registro de auditoria', e); return null; }) : null;
+    if (kick) await sendCard('kick', member.guild, member, kick).catch((e) => warn('expulsão', e));
+    else if (all.leave.enabled) await sendCard('leave', member.guild, member).catch((e) => warn('saída', e));
   } catch (e) {
     warn('GuildMemberRemove', e);
   }
@@ -905,4 +926,4 @@ async function start() {
   await client.login(process.env.DISCORD_TOKEN);
 }
 
-module.exports = { client, start, sendCard, publishPanel, publishMessage, fmt };
+module.exports = { client, start, sendCard, publishPanel, publishMessage, fmt, findKick };

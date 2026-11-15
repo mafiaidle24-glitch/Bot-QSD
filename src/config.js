@@ -69,6 +69,19 @@ function defaults() {
       nameColor: '#ffffff',
       subtitleColor: '#d0d0d0',
     },
+    kick: {
+      enabled: false,
+      channelId: '',
+      message: '**{username}** foi expulso(a) do servidor. 👢 Motivo: {reason}',
+      useImage: true,
+      bgUrl: '',
+      title: 'EXPULSO(A)',
+      subtitle: 'ATÉ NUNCA MAIS',
+      accent: '#e74c3c',
+      titleColor: '#ff7a7a',
+      nameColor: '#ffffff',
+      subtitleColor: '#d0d0d0',
+    },
     panels: [],
     messages: [],
     autoroles: { memberRoleIds: [], botRoleIds: [] },
@@ -162,7 +175,7 @@ function sanitizeCard(x, d, welcome) {
     channelId: sid(x.channelId),
     message: str(x.message, 2000, d.message),
     useImage: bool(x.useImage, d.useImage),
-    bgUrl: url(x.bgUrl),
+    bgUrl: img(x.bgUrl),
     title: str(x.title, 40, d.title),
     subtitle: str(x.subtitle, 70, d.subtitle),
     accent: col(x.accent, d.accent),
@@ -389,6 +402,7 @@ function sanitize(input, old) {
   const out = {};
   out.welcome = sanitizeCard(i.welcome, d.welcome, true);
   out.leave = sanitizeCard(i.leave, d.leave, false);
+  out.kick = sanitizeCard(i.kick, d.kick, false);
 
   // Painéis de cargos (botões)
   out.panels = arr(i.panels, 20).map((p) => {
