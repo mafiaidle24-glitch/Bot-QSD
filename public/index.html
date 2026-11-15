@@ -249,8 +249,8 @@ const card = (title, sub, ...kids) => h('div', { class: 'card' }, h('h3', {}, ti
 function discordText(text, sample = {}) {
   const out = [];
   const vars = { '{user}': '@' + (st.me.user.username), '{username}': st.me.user.username, '{server}': st.data.guild.name,
-    '{count}': '123', '{level}': '5', '{args}': 'argumento', '{displayname}': st.me.user.username, '{id}': st.me.user.id, '{channel}': '#canal', ...sample };
-  const t = String(text || '').replace(/\{(user|username|displayname|server|count|level|args|id|channel)\}/gi, (m) => vars[m.toLowerCase()] ?? m);
+    '{count}': '123', '{level}': '5', '{args}': 'argumento', '{displayname}': st.me.user.username, '{id}': st.me.user.id, '{channel}': '#canal', '{reason}': 'Motivo de exemplo', '{moderator}': 'Moderador', ...sample };
+  const t = String(text || '').replace(/\{(user|username|displayname|server|count|level|args|id|channel|reason|moderator)\}/gi, (m) => vars[m.toLowerCase()] ?? m);
   const re = /(<@&(\d+)>|<#(\d+)>|\*\*(.+?)\*\*)/g;
   let last = 0, m;
   while ((m = re.exec(t))) {
@@ -273,7 +273,7 @@ function msgPreview(text, imgEl) {
 
 /* ---------- abas ---------- */
 const TABS = [
-  ['home', '🏠 Início'], ['welcome', '👋 Boas-vindas'], ['leave', '🚪 Saída'], ['roles', '🎛️ Cargos / Botões'], ['messages', '📨 Mensagens / Embeds'], ['wiki', '📖 Wiki de Capos'], ['tickets', '🎫 Tickets'], ['autoroles', '🏷️ Autoroles'], ['moderation', '🔨 Moderação'], ['logs', '📜 Logs'],
+  ['home', '🏠 Início'], ['welcome', '👋 Boas-vindas'], ['leave', '🚪 Saída'], ['kick', '👢 Expulsão'], ['roles', '🎛️ Cargos / Botões'], ['messages', '📨 Mensagens / Embeds'], ['wiki', '📖 Wiki de Capos'], ['tickets', '🎫 Tickets'], ['autoroles', '🏷️ Autoroles'], ['moderation', '🔨 Moderação'], ['logs', '📜 Logs'],
   ['levels', '⭐ Rank / Níveis'], ['commands', '⌨️ Comandos'], ['interaction', '💬 Interação'],
   ['translate', '🌐 Tradução'], ['games', '🎮 Mini jogos'], ['identity', '🎭 Identidade'], ['expressions', '😀 Emojis / Figurinhas'], ['premium', '💎 Premium'],
 ];
@@ -283,7 +283,7 @@ function tabHome() {
     !st.data.botCanManageRoles ? h('div', { class: 'warn' }, '⚠️ O bot não tem a permissão ', h('b', {}, 'Gerenciar Cargos'), ' neste servidor. Os botões de cargo e as recompensas de nível não vão funcionar até você dar essa permissão (e deixar o cargo do bot acima dos cargos que ele vai entregar).') : null,
     card('Como usar', 'Escolha uma aba acima, ajuste e clique em "Salvar alterações" (barra que aparece embaixo). 💎 = recurso com limite no plano grátis ou exclusivo do Premium.',
       h('ul', { class: 'cl' },
-        h('li', {}, '👋 ', h('b', {}, 'Boas-vindas / Saída'), ': mensagem de texto e, no Premium, cartão com a foto do membro. 💎'),
+        h('li', {}, '👋 ', h('b', {}, 'Boas-vindas / Saída / Expulsão'), ': mensagem de texto e, no Premium, cartão com a foto do membro. O fundo do cartão pode ser enviado do aparelho. 💎'),
         h('li', {}, '🎛️ ', h('b', {}, 'Cargos / Botões'), ': painéis com botões coloridos para o membro pegar cargos. 💎'),
         h('li', {}, '📨 ', h('b', {}, 'Mensagens / Embeds'), ': avisos e regras com cores, imagens e campos, publicados em um canal. 💎'),
         h('li', {}, '📖 ', h('b', {}, 'Wiki de Capos'), ': fichas de personagens que o bot envia ao digitar ', h('code', {}, '!nome'), '. 💎'),
@@ -320,6 +320,7 @@ function tabHome() {
 function tabCard(kind) {
   const c = st.cfg[kind];
   const isW = kind === 'welcome';
+  const isK = kind === 'kick';
   const img = h('img', { class: 'prev', alt: 'prévia' });
   const wrap = h('div');
   const refresh = async () => {
@@ -345,13 +346,13 @@ function tabCard(kind) {
   };
 
   wrap.append(
-    card(isW ? 'Mensagem de boas-vindas' : 'Mensagem de saída', 'Enviada quando alguém ' + (isW ? 'entra no' : 'sai do') + ' servidor.',
+    card(isW ? 'Mensagem de boas-vindas' : isK ? 'Mensagem de expulsão' : 'Mensagem de saída', isK ? 'Enviada no lugar da mensagem de saída quando alguém é expulso. O bot precisa da permissão "Ver registro de auditoria" (administrador já tem).' : 'Enviada quando alguém ' + (isW ? 'entra no' : 'sai do') + ' servidor.',
       chk(c, 'enabled', 'Ativar'),
       field('Canal', sel(c, 'channelId', chOpts())),
-      field('Texto da mensagem', tArea(c, 'message', { rows: 5 }), 'Aceita **negrito**, variáveis e menções de cargo/canal.'),
+      field('Texto da mensagem', tArea(c, 'message', isK ? { rows: 5, vars: ['{user}', '{username}', '{server}', '{count}', '{reason}', '{moderator}'] } : { rows: 5 }), isK ? 'Use {reason} para o motivo e {moderator} para quem expulsou.' : 'Aceita **negrito**, variáveis e menções de cargo/canal.'),
       chk(c, 'useImage', 'Enviar imagem com a foto do membro')),
     card('Imagem', 'Personalize o cartão. A prévia atualiza sozinha.',
-      field('Fundo (link de imagem, opcional)', tInput(c, 'bgUrl', { ph: 'https://…/imagem.png (vazio = fundo padrão)', max: 500 }), 'Use um link direto para .png/.jpg. Ideal: proporção 2:1 (ex.: 1024×500).'),
+      field('Fundo (opcional)', imgPicker(c, 'bgUrl', false, true), 'Envie uma imagem do aparelho (ou cole um link). Ideal: proporção 2:1 (ex.: 1024×500). Vazio = fundo padrão.'),
       h('div', { class: 'row' },
         field('Título', tInput(c, 'title', { max: 40 })),
         field('Subtítulo', tInput(c, 'subtitle', { max: 70 }))),
@@ -598,6 +599,7 @@ function tabNotice(tab) {
   const T = {
     welcome: '💎 No plano grátis o bot envia só a mensagem de texto. O cartão com imagem é Premium.',
     leave: '💎 No plano grátis o bot envia só a mensagem de texto. O cartão com imagem é Premium.',
+    kick: '💎 No plano grátis o bot envia só a mensagem de texto. O cartão com imagem é Premium.',
     roles: '💎 Plano grátis: até ' + (pm.maxPanelButtons) + ' botões por painel e ' + (q.panelPublishes ? q.panelPublishes.limit : '') + ' publicações por mês (' + use('panelPublishes') + ').',
     messages: '💎 Plano grátis: ' + (q.messagePublishes ? q.messagePublishes.limit : '') + ' publicações por mês (' + use('messagePublishes') + ').',
     wiki: '💎 Plano grátis: ' + (q.wikiPublishes ? q.wikiPublishes.limit : '') + ' publicação da lista por mês (' + use('wikiPublishes') + ').',
@@ -805,7 +807,7 @@ function imgSrc(v) {
   return v.indexOf('up:') === 0 ? '/api/guilds/' + st.gid + '/uploads/' + v.slice(3) : v;
 }
 
-function imgPicker(o, k, canRound) {
+function imgPicker(o, k, canRound, compress) {
   const box = h('div', { class: 'imgp' });
   const draw = () => {
     const v = o[k] || '';
@@ -821,7 +823,7 @@ function imgPicker(o, k, canRound) {
       if (!f) return;
       if (f.size > 8 * 1024 * 1024) { toast('Imagem muito grande (máx. 8 MB).', 'err'); return; }
       try {
-        const r = await fetch('/api/guilds/' + st.gid + '/uploads' + (wantRound ? '?round=1' : ''), { method: 'POST', credentials: 'same-origin',
+        const r = await fetch('/api/guilds/' + st.gid + '/uploads' + (wantRound ? '?round=1' : compress ? '?bg=1' : ''), { method: 'POST', credentials: 'same-origin',
           headers: { 'Content-Type': 'application/octet-stream' }, body: await f.arrayBuffer() });
         const j = await r.json().catch(() => ({}));
         if (!r.ok) throw new Error(j.error || 'Erro ' + r.status);
@@ -1278,7 +1280,7 @@ function tabExpressions() {
     log, gallery);
 }
 
-const TAB_FN = { home: tabHome, messages: tabMessages, wiki: tabWiki, tickets: tabTickets, autoroles: tabAutoroles, moderation: tabModeration, logs: tabLogs, welcome: () => tabCard('welcome'), leave: () => tabCard('leave'), roles: tabRoles, levels: tabLevels, commands: tabCommands, interaction: tabInteraction, translate: tabTranslate, games: tabGames, identity: tabIdentity, expressions: tabExpressions, premium: tabPremium };
+const TAB_FN = { home: tabHome, messages: tabMessages, wiki: tabWiki, tickets: tabTickets, autoroles: tabAutoroles, moderation: tabModeration, logs: tabLogs, welcome: () => tabCard('welcome'), leave: () => tabCard('leave'), kick: () => tabCard('kick'), roles: tabRoles, levels: tabLevels, commands: tabCommands, interaction: tabInteraction, translate: tabTranslate, games: tabGames, identity: tabIdentity, expressions: tabExpressions, premium: tabPremium };
 
 /* ---------- salvar / carregar ---------- */
 async function save() {

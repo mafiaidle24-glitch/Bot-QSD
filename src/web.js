@@ -195,7 +195,7 @@ function startWeb(bot) {
       PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.EmbedLinks,
       PermissionFlagsBits.AttachFiles, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.AddReactions,
       PermissionFlagsBits.UseExternalEmojis, PermissionFlagsBits.ManageRoles, PermissionFlagsBits.ManageChannels,
-      PermissionFlagsBits.ManageMessages, PermissionFlagsBits.ModerateMembers, PermissionFlagsBits.KickMembers, PermissionFlagsBits.BanMembers, PermissionFlagsBits.ChangeNickname,
+      PermissionFlagsBits.ManageMessages, PermissionFlagsBits.ModerateMembers, PermissionFlagsBits.KickMembers, PermissionFlagsBits.ViewAuditLog, PermissionFlagsBits.BanMembers, PermissionFlagsBits.ChangeNickname,
       PermissionFlagsBits.ManageGuildExpressions,
     ]).bitfield;
     const q = new URLSearchParams({ client_id: CLIENT_ID, permissions: String(perms), scope: 'bot applications.commands', guild_id: guildId });
@@ -273,7 +273,7 @@ function startWeb(bot) {
   app.post('/api/guilds/:id/uploads', requireAuth, guildAccess, express.raw({ type: '*/*', limit: uploads.MAX }), async (req, res) => {
     try {
       if (!Buffer.isBuffer(req.body) || !req.body.length) return res.status(400).json({ error: 'Nenhuma imagem recebida (máx. 16 MB).' });
-      const buf = req.query.round === '1' ? await uploads.round(req.body) : req.body;
+      const buf = req.query.round === '1' ? await uploads.round(req.body) : req.query.bg === '1' ? await uploads.compress(req.body) : req.body;
       res.json({ ref: uploads.save(req.guild.id, buf) });
     } catch (e) {
       res.status(400).json({ error: e.message });
@@ -348,9 +348,9 @@ function startWeb(bot) {
 
   app.post('/api/guilds/:id/test/:kind', requireAuth, guildAccess, wrap(async (req, res) => {
     const kind = req.params.kind;
-    if (!['welcome', 'leave'].includes(kind)) return res.status(400).json({ error: 'Tipo inválido.' });
+    if (!['welcome', 'leave', 'kick'].includes(kind)) return res.status(400).json({ error: 'Tipo inválido.' });
     try {
-      await bot.sendCard(kind, req.guild, req.member);
+      await bot.sendCard(kind, req.guild, req.member, kind === 'kick' ? { reason: 'Exemplo de motivo', moderator: req.member.user.username } : {});
       res.json({ ok: true });
     } catch (e) {
       res.status(400).json({ error: e.message });
@@ -360,12 +360,13 @@ function startWeb(bot) {
   // Prévia ao vivo da imagem (usa o rascunho enviado, sem salvar)
   app.post('/api/guilds/:id/preview/:kind', requireAuth, guildAccess, previewLimit, wrap(async (req, res) => {
     const kind = req.params.kind;
-    if (!['welcome', 'leave'].includes(kind)) return res.status(400).json({ error: 'Tipo inválido.' });
+    if (!['welcome', 'leave', 'kick'].includes(kind)) return res.status(400).json({ error: 'Tipo inválido.' });
     const clean = cfgs.validate(req.guild.id, { [kind]: req.body })[kind];
     const user = req.member.user;
     const buf = await renderCard({
       ...clean,
       kind,
+      guildId: req.guild.id,
       name: req.member.displayName,
       avatarUrl: user.displayAvatarURL({ extension: 'png', size: 256, forceStatic: true }),
     });
