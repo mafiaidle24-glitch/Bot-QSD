@@ -135,7 +135,7 @@ function startWeb(bot) {
     days: premium.planDays(),
     perks: premium.perkLines(),
     limits: { ticketTypes: premium.perks(gid).ticketTypes, words: premium.perks(gid).words, levelCard: premium.perks(gid).levelCard },
-    features: ['welcomeCard', 'autoroles', 'moderation', 'logs', 'levelCard', 'ticketTranscript', 'duelBoss', 'identity'].reduce((o, k) => ({ ...o, [k]: !!premium.perks(gid)[k] }), {}),
+    features: ['welcomeCard', 'autoroles', 'moderation', 'logs', 'levelCard', 'ticketTranscript', 'duelBoss', 'identity', 'telefone'].reduce((o, k) => ({ ...o, [k]: !!premium.perks(gid)[k] }), {}),
     quotas: ['panelPublishes', 'messagePublishes', 'wikiPublishes', 'translationsDay', 'gamesDay'].reduce((o, k) => {
       const q = premium.quota(gid, k);
       return { ...o, [k]: { limit: q.limit === Infinity ? null : q.limit, used: q.used, per: q.per } };
