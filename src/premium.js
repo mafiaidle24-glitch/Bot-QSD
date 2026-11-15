@@ -52,6 +52,7 @@ const PERKS = {
   ticketTranscript: true, // transcrição .txt ao fechar ticket
   duelBoss: true,      // /duelo e /chefe
   identity: true,      // nome, foto, banner e bio do bot no servidor
+  telefone: true,      // Telefone Vermelho (atendimento por mensagem privada)
   panelButtons: 25,    // botões por painel de cargos
   panelPublishes: Infinity,   // publicações de painel de cargos por mês
   messagePublishes: Infinity, // publicações de mensagens/embeds por mês
@@ -65,7 +66,7 @@ const PERKS = {
 const FREE = {
   chatXp: 1, rpgCash: 1, rpgXp: 1, bossTries: 3, ticketTypes: 3, words: 30, levelCard: false,
   welcomeCard: false, autoroles: false, moderation: false, logs: false, ticketTranscript: false, duelBoss: false,
-  identity: false,
+  identity: false, telefone: false,
   panelButtons: 3, panelPublishes: 2, messagePublishes: 2, wikiPublishes: 1,
   customCommands: 5, triggers: 5, reactions: 5, translationsDay: 20, gamesDay: 30,
 };
@@ -169,6 +170,7 @@ function perkLines() {
     '📖 Wiki de Capos: publicações ilimitadas (grátis: ' + FREE.wikiPublishes + '/mês)',
     '🎫 Até ' + PERKS.ticketTypes + ' tipos de ticket e transcrição (grátis: ' + FREE.ticketTypes + ' tipos, sem transcrição)',
     '🏷️ Autoroles, 🔨 Moderação com automod e 📜 Logs (exclusivos Premium)',
+    '📞 Telefone Vermelho: atendimento por mensagem privada, estilo ModMail (exclusivo Premium)',
     '⭐ +' + Math.round((PERKS.chatXp - 1) * 100) + '% de XP e cartão de rank no aviso de nível',
     '⌨️ Comandos personalizados e 💬 interação: até ' + PERKS.customCommands + ' de cada (grátis: ' + FREE.customCommands + ')',
     '🌐 Traduções ilimitadas (grátis: ' + FREE.translationsDay + ' por dia)',

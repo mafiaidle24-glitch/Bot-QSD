@@ -129,6 +129,21 @@ function defaults() {
         types: [{ id: 'suporte', label: 'Suporte', emoji: '🎫', style: 1, welcome: 'Olá {user}! Explique o motivo do seu contato. A equipe vai te responder em breve.' }],
       },
     },
+    telefone: {
+      enabled: false,
+      categoryId: '',
+      staffRoleIds: [],
+      logChannelId: '',
+      pingStaff: true,
+      anonymous: false,
+      transcript: true,
+      color: '#e74c3c',
+      confirmText: 'Sua mensagem será enviada à equipe de **{server}**. Quer enviar?',
+      sentText: '✅ Pronto! Sua mensagem foi enviada à equipe de **{server}**.\nContinue a conversa **aqui mesmo**: tudo o que você escrever chega até eles, e as respostas aparecem aqui.',
+      closeText: '🔒 Seu atendimento em **{server}** foi encerrado. Se precisar de ajuda de novo, é só mandar uma nova mensagem.',
+      counter: 0,
+      blocked: [],
+    },
     wiki: {
       channels: [], // [{ channelId, rarities: [] }]  (rarities vazio = todas)
       who: 'owner', // 'owner' | 'roles' | 'everyone'
@@ -329,6 +344,27 @@ function sanitizeTickets(t, old) {
   };
 }
 
+// Telefone Vermelho: atendimento por mensagem privada (estilo ModMail).
+function sanitizeTelefone(t, old) {
+  t = t && typeof t === 'object' ? t : {};
+  const d = defaults().telefone;
+  return {
+    enabled: bool(t.enabled, false),
+    categoryId: sid(t.categoryId),
+    staffRoleIds: idList(t.staffRoleIds, 10),
+    logChannelId: sid(t.logChannelId),
+    pingStaff: bool(t.pingStaff, true),
+    anonymous: bool(t.anonymous, false),
+    transcript: bool(t.transcript, true),
+    color: col(t.color, d.color),
+    confirmText: str(t.confirmText, 1000, d.confirmText).trim() || d.confirmText,
+    sentText: str(t.sentText, 1500, d.sentText).trim() || d.sentText,
+    closeText: str(t.closeText, 1500, d.closeText).trim() || d.closeText,
+    counter: int(old?.telefone?.counter, 0, 100000000, 0),
+    blocked: idList(old?.telefone?.blocked, 500),
+  };
+}
+
 // Wiki de personagens: comandos como !ateu que respondem com imagens.
 function sanitizeWiki(w, old) {
   w = w && typeof w === 'object' ? w : {};
@@ -457,6 +493,7 @@ function sanitize(input, old) {
 
   out.wiki = sanitizeWiki(i.wiki, old);
   out.tickets = sanitizeTickets(i.tickets, old);
+  out.telefone = sanitizeTelefone(i.telefone, old);
   out.logs = sanitizeLogs(i.logs);
   out.autoroles = sanitizeAutoroles(i.autoroles);
   out.identity = sanitizeIdentity(i.identity);
@@ -619,6 +656,23 @@ function nextTicketNumber(guildId) {
   return cfg.tickets.counter;
 }
 
+/** Próximo número de atendimento do Telefone Vermelho. */
+function nextTelefoneNumber(guildId) {
+  const cfg = getConfig(guildId);
+  cfg.telefone.counter += 1;
+  db.data.guilds[guildId] = cfg;
+  db.save();
+  return cfg.telefone.counter;
+}
+
+/** Lista de membros bloqueados no Telefone Vermelho. */
+function setTelefoneBlocked(guildId, ids) {
+  const cfg = getConfig(guildId);
+  cfg.telefone.blocked = idList(ids, 500);
+  db.data.guilds[guildId] = cfg;
+  db.save();
+}
+
 function setWikiListIds(guildId, ids) {
   const cfg = getConfig(guildId);
   cfg.wiki.listMessageIds = idList(ids, 20);
@@ -635,4 +689,4 @@ function setPanelMessage(guildId, panelId, messageId) {
   db.save();
 }
 
-module.exports = { defaults, getConfig, setConfig, validate, setPanelMessage, setMessageRef, setWikiListIds, setTicketPanelMessage, nextTicketNumber, newId };
+module.exports = { defaults, getConfig, setConfig, validate, setPanelMessage, setMessageRef, setWikiListIds, setTicketPanelMessage, nextTicketNumber, nextTelefoneNumber, setTelefoneBlocked, newId };

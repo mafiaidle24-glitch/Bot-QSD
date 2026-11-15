@@ -273,7 +273,7 @@ function msgPreview(text, imgEl) {
 
 /* ---------- abas ---------- */
 const TABS = [
-  ['home', '🏠 Início'], ['welcome', '👋 Boas-vindas'], ['leave', '🚪 Saída'], ['kick', '👢 Expulsão'], ['roles', '🎛️ Cargos / Botões'], ['messages', '📨 Mensagens / Embeds'], ['wiki', '📖 Wiki de Capos'], ['tickets', '🎫 Tickets'], ['autoroles', '🏷️ Autoroles'], ['moderation', '🔨 Moderação'], ['logs', '📜 Logs'],
+  ['home', '🏠 Início'], ['welcome', '👋 Boas-vindas'], ['leave', '🚪 Saída'], ['kick', '👢 Expulsão'], ['roles', '🎛️ Cargos / Botões'], ['messages', '📨 Mensagens / Embeds'], ['wiki', '📖 Wiki de Capos'], ['tickets', '🎫 Tickets'], ['telefone', '📞 Telefone Vermelho'], ['autoroles', '🏷️ Autoroles'], ['moderation', '🔨 Moderação'], ['logs', '📜 Logs'],
   ['levels', '⭐ Rank / Níveis'], ['commands', '⌨️ Comandos'], ['interaction', '💬 Interação'],
   ['translate', '🌐 Tradução'], ['games', '🎮 Mini jogos'], ['identity', '🎭 Identidade'], ['expressions', '😀 Emojis / Figurinhas'], ['premium', '💎 Premium'],
 ];
@@ -288,6 +288,7 @@ function tabHome() {
         h('li', {}, '📨 ', h('b', {}, 'Mensagens / Embeds'), ': avisos e regras com cores, imagens e campos, publicados em um canal. 💎'),
         h('li', {}, '📖 ', h('b', {}, 'Wiki de Capos'), ': fichas de personagens que o bot envia ao digitar ', h('code', {}, '!nome'), '. 💎'),
         h('li', {}, '🎫 ', h('b', {}, 'Tickets'), ': atendimento privado com tipos, equipe, log e transcrição. 💎'),
+        h('li', {}, '📞 ', h('b', {}, 'Telefone Vermelho'), ': atendimento por mensagem privada, estilo ModMail: o membro fala com o bot e a equipe responde num canal privado. 💎 Premium'),
         h('li', {}, '🏷️ ', h('b', {}, 'Autoroles'), ': cargo automático para quem entra (visitante) e para bots. 💎 Premium'),
         h('li', {}, '🔨 ', h('b', {}, 'Moderação'), ': automod (spam, convites, links, palavras) e punição por avisos. 💎 Premium'),
         h('li', {}, '📜 ', h('b', {}, 'Logs'), ': registra mensagens, entradas, cargos, bans e canais num canal da equipe. 💎 Premium'),
@@ -305,7 +306,7 @@ function tabHome() {
         ['🎮 Diversão', [['/quiz', 'pergunta relâmpago'], ['/adivinhar', 'número secreto (fácil, normal, difícil)'], ['/rali', 'rali de palavras'], ['/ship', 'compatibilidade entre dois membros'], ['/ppt', 'pedra, papel e tesoura'], ['/dado', '/moeda', '/bola8', '/piada', '/fato', '/abracar']]],
         ['🕴️ RPG da máfia', [['/aventura', 'lutar, loja, negócios, classes e missões'], ['/aventuraranking', 'maiores mafiosos'], ['/duelo', 'duelo com aposta 💎'], ['/chefe', 'chefão semanal 💎']]],
         ['🔨 Moderação (equipe) 💎', [['/limpar', '/avisar', '/avisos', '/limparavisos', '/silenciar', '/tirarsilencio', '/expulsar', '/banir', '/desbanir']]],
-        ['🌐 Utilidades', [['/traduzir', 'traduz um texto'], ['/ticket', 'publica o painel de tickets'], ['/painel', 'link deste painel'], ['/premium', 'plano Premium do servidor']]],
+        ['🌐 Utilidades', [['/traduzir', 'traduz um texto'], ['/ticket', 'publica o painel de tickets'], ['/telefone', 'fechar, bloquear e desbloquear atendimentos (equipe)'], ['/painel', 'link deste painel'], ['/premium', 'plano Premium do servidor']]],
       ].map(([title, cmds]) => h('div', { style: 'margin-bottom:10px' },
         h('b', {}, title),
         h('ul', { class: 'cl' }, cmds.map((c) => c.length === 1 || (c.length > 2) ? null : h('li', {}, h('code', {}, c[0]), c[1] ? ' ' + c[1] : '')),
@@ -499,6 +500,35 @@ function tabLogs() {
     card('O que registrar', '', EV.map(([k, t]) => chk(l.events, k, t))));
 }
 
+function tabTelefone() {
+  const t = st.cfg.telefone;
+  const catOpts = (st.data.categories || []).map((c) => ({ v: c.id, t: '📁 ' + c.name }));
+  const vars = ['{server}', '{username}'];
+  return h('div', {},
+    card('📞 Telefone Vermelho', 'Atendimento estilo ModMail: o membro manda mensagem no PRIVADO do bot, confirma com os botões ✅ 🔄 ❌ e a equipe responde em um canal privado do servidor. As respostas da equipe voltam para o privado do membro.',
+      chk(t, 'enabled', 'Telefone Vermelho ligado'),
+      h('div', { class: 'row' },
+        field('Cargos da equipe (veem e respondem)', multi(t, 'staffRoleIds', roleOpts(), { label: 'adicionar cargo…' })),
+        field('Categoria dos atendimentos', sel(t, 'categoryId', catOpts, { empty: '📞 Criar/usar automática' }))),
+      h('div', { class: 'row' },
+        field('Canal de log (abertura, encerramento e transcrição)', sel(t, 'logChannelId', chOpts(), { empty: '— sem log —' })),
+        field('Cor das mensagens', cInput(t, 'color'))),
+      chk(t, 'pingStaff', 'Mencionar a equipe quando chegar um novo atendimento'),
+      chk(t, 'anonymous', 'Respostas anônimas (o membro vê "Equipe de …" em vez do nome de quem respondeu)'),
+      chk(t, 'transcript', 'Enviar a transcrição (.txt) no canal de log ao encerrar')),
+    card('💬 Mensagens que o membro recebe no privado', 'Variáveis: {server} nome do servidor • {username} nome do membro.',
+      field('Pedido de confirmação (aparece com os botões ✅ 🔄 ❌)', tArea(t, 'confirmText', { rows: 3, max: 1000, vars })),
+      field('Depois de enviar à equipe', tArea(t, 'sentText', { rows: 4, max: 1500, vars })),
+      field('Quando a equipe encerra o atendimento', tArea(t, 'closeText', { rows: 3, max: 1500, vars }))),
+    card('📖 Como funciona', null,
+      h('ul', { class: 'cl' },
+        h('li', {}, 'O membro manda uma mensagem no privado do bot. Se ele estiver em mais de um servidor com o Telefone Vermelho, o bot pergunta para qual enviar.'),
+        h('li', {}, 'Ele confirma com ✅ (🔄 refaz ou troca de servidor, ❌ cancela). Só então o canal ', h('code', {}, '#telefone-nome'), ' é criado, visível só para a equipe.'),
+        h('li', {}, 'Tudo o que a equipe escrever nesse canal vai para o privado do membro. Comece a mensagem com ', h('code', {}, '//'), ' para fazer uma ', h('b', {}, 'nota interna'), ' que o membro não vê.'),
+        h('li', {}, 'Para encerrar, use o botão ', h('b', {}, '🔒 Encerrar atendimento'), ' ou ', h('code', {}, '/telefone fechar'), '. Para barrar abusos: ', h('code', {}, '/telefone bloquear'), ' e ', h('code', {}, '/telefone desbloquear'), '.'),
+        h('li', {}, 'Cada membro tem no máximo um atendimento aberto por vez.'))));
+}
+
 function tabTickets() {
   const t = st.cfg.tickets;
   const p = t.panel;
@@ -604,7 +634,7 @@ function tabNotice(tab) {
     messages: '💎 Plano grátis: ' + (q.messagePublishes ? q.messagePublishes.limit : '') + ' publicações por mês (' + use('messagePublishes') + ').',
     wiki: '💎 Plano grátis: ' + (q.wikiPublishes ? q.wikiPublishes.limit : '') + ' publicação da lista por mês (' + use('wikiPublishes') + ').',
     tickets: '💎 Plano grátis: até ' + pm.limits.ticketTypes + ' tipos de ticket e sem transcrição .txt.',
-    autoroles: LOCK, moderation: LOCK, logs: LOCK,
+    autoroles: LOCK, moderation: LOCK, logs: LOCK, telefone: LOCK,
     identity: pm.features && pm.features.identity === false ? LOCK : '',
     levels: '💎 O cartão de rank no aviso de nível é Premium.',
     commands: '💎 Plano grátis: até 5 comandos personalizados.',
@@ -1280,7 +1310,7 @@ function tabExpressions() {
     log, gallery);
 }
 
-const TAB_FN = { home: tabHome, messages: tabMessages, wiki: tabWiki, tickets: tabTickets, autoroles: tabAutoroles, moderation: tabModeration, logs: tabLogs, welcome: () => tabCard('welcome'), leave: () => tabCard('leave'), kick: () => tabCard('kick'), roles: tabRoles, levels: tabLevels, commands: tabCommands, interaction: tabInteraction, translate: tabTranslate, games: tabGames, identity: tabIdentity, expressions: tabExpressions, premium: tabPremium };
+const TAB_FN = { home: tabHome, messages: tabMessages, wiki: tabWiki, tickets: tabTickets, telefone: tabTelefone, autoroles: tabAutoroles, moderation: tabModeration, logs: tabLogs, welcome: () => tabCard('welcome'), leave: () => tabCard('leave'), kick: () => tabCard('kick'), roles: tabRoles, levels: tabLevels, commands: tabCommands, interaction: tabInteraction, translate: tabTranslate, games: tabGames, identity: tabIdentity, expressions: tabExpressions, premium: tabPremium };
 
 /* ---------- salvar / carregar ---------- */
 async function save() {

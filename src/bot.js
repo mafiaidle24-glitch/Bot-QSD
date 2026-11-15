@@ -20,6 +20,7 @@ const rpg = require('./rpg');
 const premium = require('./premium');
 const identity = require('./identity');
 const diagnostico = require('./diagnostico');
+const telefone = require('./telefone');
 
 const EPHEMERAL = MessageFlags.Ephemeral;
 const BASE_URL = (process.env.BASE_URL || 'http://localhost:3000').replace(/\/$/, '');
@@ -32,6 +33,7 @@ const client = new Client({
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildMessageReactions,
     GatewayIntentBits.GuildModeration,
+    GatewayIntentBits.DirectMessages,
   ],
   partials: [Partials.Message, Partials.Channel, Partials.Reaction, Partials.GuildMember, Partials.User],
 });
@@ -559,7 +561,13 @@ async function handleXp(msg, cfg) {
 }
 
 client.on(Events.MessageCreate, async (msg) => {
-  if (!msg.guild || msg.author.bot || msg.webhookId) return;
+  if (!msg.guild) {
+    // Mensagem privada para o bot: Telefone Vermelho
+    if (!msg.author.bot) telefone.handleDM(msg).catch((e) => warn('telefone (privado)', e));
+    return;
+  }
+  if (msg.author.bot || msg.webhookId) return;
+  try { if (await telefone.handleStaffMessage(msg)) return; } catch (e) { warn('telefone (equipe)', e); }
   const cfg = cfgs.getConfig(msg.guild.id);
   try { if (await moderation.automod(msg, cfg)) return; } catch (e) { warn('automod', e); }
   try { if (await wiki.handleMessage(msg)) return; } catch (e) { warn('wiki', e); }
@@ -719,6 +727,7 @@ const slashCommands = [
   ...rpg.commands,
   ...premium.commands,
   ...diagnostico.commands,
+  ...telefone.commands,
 ].map((c) => c.setDMPermission(false).toJSON());
 
 async function registerCommands(guild) {
@@ -737,6 +746,7 @@ async function runSlash(i) {
   if (await rpg.handleSlash(i, { gameAllowed })) return;
   if (await premium.handleSlash(i)) return;
   if (await diagnostico.handleSlash(i)) return;
+  if (await telefone.handleSlash(i)) return;
   switch (i.commandName) {
     case 'rank': {
       if (!cfg.levels.enabled) return i.reply({ content: 'O sistema de níveis está desativado.', flags: EPHEMERAL });
@@ -845,6 +855,7 @@ async function runSlash(i) {
 
 client.on(Events.InteractionCreate, async (i) => {
   try {
+    if ((i.isButton() || i.isStringSelectMenu()) && i.customId.startsWith('tf:')) return await telefone.handleInteraction(i);
     if (!i.guild) return;
     if (i.isChatInputCommand()) return await runSlash(i);
     if (i.isStringSelectMenu() && i.customId.startsWith('rpg:')) return await rpg.handleSelect(i);
