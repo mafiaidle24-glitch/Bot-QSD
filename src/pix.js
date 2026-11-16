@@ -7,6 +7,7 @@ const NAME = 'BOT QSD';      // nome exibido no QR (até 25 letras)
 const CITY = 'SAO PAULO';    // cidade (até 15 letras, só consta no Pix)
 const TXID = 'DqcPAp8gn4';   // identificador da cobrança no Nubank
 const AMOUNT = 14.9;         // valor em reais
+const SUPPORT = 'https://discord.gg/DYYTGZEWrr'; // convite do servidor de suporte (para enviar o comprovante)
 
 const field = (id, value) => id + String(value.length).padStart(2, '0') + value;
 
@@ -35,4 +36,4 @@ function payload(amount = AMOUNT) {
   return body + crc16(body);
 }
 
-module.exports = { payload, crc16, AMOUNT, NAME, CITY, KEY, TXID };
+module.exports = { payload, crc16, SUPPORT, AMOUNT, NAME, CITY, KEY, TXID };

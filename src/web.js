@@ -132,7 +132,7 @@ function startWeb(bot) {
   const premiumState = (gid) => ({
     ...premium.info(gid),
     mp: premium.mpOn(),
-    pix: premium.mpOn() ? null : { code: pix.payload(), amount: pix.AMOUNT, support: process.env.SUPPORT_URL || '' }, // Pix manual (sem Mercado Pago)
+    pix: premium.mpOn() ? null : { code: pix.payload(), amount: pix.AMOUNT, support: process.env.SUPPORT_URL || pix.SUPPORT }, // Pix manual (sem Mercado Pago)
     price: premium.price(),
     days: premium.planDays(),
     perks: premium.perkLines(),
