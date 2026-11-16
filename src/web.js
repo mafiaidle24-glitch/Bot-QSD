@@ -13,6 +13,7 @@ const tickets = require('./tickets');
 const identity = require('./identity');
 const expressions = require('./expressions');
 const premium = require('./premium');
+const pix = require('./pix');
 const { renderCard } = require('./card');
 const { LANGS } = require('./translate');
 
@@ -131,6 +132,7 @@ function startWeb(bot) {
   const premiumState = (gid) => ({
     ...premium.info(gid),
     mp: premium.mpOn(),
+    pix: premium.mpOn() ? null : { code: pix.payload(), amount: pix.AMOUNT, support: process.env.SUPPORT_URL || '' }, // Pix manual (sem Mercado Pago)
     price: premium.price(),
     days: premium.planDays(),
     perks: premium.perkLines(),
