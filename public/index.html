@@ -513,7 +513,7 @@ function tabTelefone() {
       h('div', { class: 'row' },
         field('Canal de log (abertura, encerramento e transcrição)', sel(t, 'logChannelId', chOpts(), { empty: '— sem log —' })),
         field('Cor das mensagens', cInput(t, 'color'))),
-      chk(t, 'pingStaff', 'Mencionar a equipe quando chegar um novo atendimento'),
+      chk(t, 'pingStaff', 'Mencionar a equipe (notificar) a cada mensagem nova do membro'),
       chk(t, 'anonymous', 'Respostas anônimas (o membro vê "Equipe de …" em vez do nome de quem respondeu)'),
       chk(t, 'transcript', 'Enviar a transcrição (.txt) no canal de log ao encerrar')),
     card('💬 Mensagens que o membro recebe no privado', 'Variáveis: {server} nome do servidor • {username} nome do membro.',
