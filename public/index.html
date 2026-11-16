@@ -703,6 +703,27 @@ function tabIdentity() {
       h('p', { class: 'sub', style: 'margin-top:10px' }, 'Dica: se aparecer erro de permissão no nome, dê ao bot a permissão "Alterar apelido" (ou convide de novo pelo painel). O Discord limita trocas muito seguidas de imagem; se acontecer, espere alguns minutos.')));
 }
 
+/** Pix manual: QR + copia e cola; a equipe libera o Premium depois de conferir o pagamento. */
+function manualPix(px) {
+  const brl = 'R$ ' + px.amount.toFixed(2).replace('.', ',');
+  const code = h('textarea', { rows: 4, readonly: true, style: 'width:100%;font-family:monospace;font-size:12px' });
+  code.value = px.code;
+  const gname = (st.guilds.find((g) => g.id === st.gid) || {}).name || '';
+  return h('div', { id: 'manualpix' },
+    h('p', {}, h('b', {}, 'Como assinar'), ' (a ativação é feita pela equipe, em geral em poucas horas):'),
+    h('ol', { class: 'cl' },
+      h('li', {}, 'Pague ', h('b', {}, brl), ' por Pix: leia o QR code abaixo ou use o ', h('b', {}, 'copia e cola'), '.'),
+      h('li', {}, 'Envie o ', h('b', {}, 'comprovante'), ' no servidor de suporte do BOT QSD, dizendo o nome do seu servidor',
+        gname ? [' (', h('b', {}, gname), ')'] : '', ' e o ID: ', h('code', {}, st.gid), '.',
+        px.support ? [' ', h('a', { href: px.support, target: '_blank', rel: 'noopener' }, 'Abrir servidor de suporte')] : ''),
+      h('li', {}, 'Quando a equipe confirmar, o Premium aparece aqui automaticamente.')),
+    h('img', { src: '/pix-qr.png', alt: 'QR Code Pix', style: 'width:220px;height:220px;background:#fff;border-radius:8px;display:block;margin:8px 0' }),
+    code,
+    h('div', { style: 'margin-top:8px' },
+      h('button', { class: 'btn small', onclick: async () => { try { await navigator.clipboard.writeText(px.code); } catch { code.select(); document.execCommand('copy'); } toast('Código Pix copiado!', 'ok'); } }, '📋 Copiar código Pix')),
+    h('p', { style: 'color:var(--muted)' }, 'No app do banco, o nome do recebedor pode aparecer como o do titular da conta. Confira que o valor é ' + brl + '.'));
+}
+
 function tabPremium() {
   const pm = st.data.premium;
   const until = (ms) => new Date(ms).toLocaleDateString('pt-BR');
@@ -746,6 +767,7 @@ function tabPremium() {
       h('ul', { class: 'cl' }, pm.perks.map((x) => h('li', {}, x))),
       h('p', {}, h('b', {}, 'R$ ' + pm.price.toFixed(2).replace('.', ',')), ' por ' + pm.days + ' dias, pago por Pix. Se renovar antes de acabar, os dias são somados.'),
       pm.mp ? h('button', { class: 'btn green', onclick: pay }, pm.paid ? '💎 Renovar por Pix' : '💎 Assinar por Pix')
+        : pm.pix ? manualPix(pm.pix)
         : h('div', { class: 'warn' }, 'A cobrança por Pix ainda não foi ativada pelo dono do bot (falta configurar o Mercado Pago).'),
       payBox));
   if (st.data.isBotOwner) {
