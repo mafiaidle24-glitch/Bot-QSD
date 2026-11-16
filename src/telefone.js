@@ -235,7 +235,14 @@ async function forwardToStaff(channel, user, content, files, cfg) {
     .setAuthor({ name: user.username, iconURL: user.displayAvatarURL() })
     .setDescription(content ? content.slice(0, 4000) : '*(somente anexo)*')
     .setTimestamp();
-  await channel.send({ embeds: [embed], files, allowedMentions: { parse: [] } });
+  // Menciona a equipe a cada mensagem nova, para a notificação chegar (como no primeiro aviso).
+  const roles = cfg.pingStaff ? cfg.staffRoleIds.filter((id) => channel.guild?.roles.cache.has(id)) : [];
+  await channel.send({
+    content: roles.length ? roles.map((id) => '<@&' + id + '>').join(' ') : undefined,
+    embeds: [embed],
+    files,
+    allowedMentions: { roles, users: [] },
+  });
 }
 
 async function createConversation(guild, user, d, cfg) {
