@@ -646,6 +646,100 @@ function tabNotice(tab) {
 }
 
 /* ---------- Identidade do bot neste servidor ---------- */
+/* Ajustar imagem: o usuário escolhe o enquadramento (arrastar + zoom) ou encaixa a imagem inteira,
+   e o painel envia já no tamanho e na proporção certos. GIFs animados seguem sem ajuste. */
+const IMG_SPEC = {
+  banner: { ratio: 17 / 6, outW: 1360, title: 'Banner do bot (proporção 17:6)' },
+  avatar: { ratio: 1, outW: 512, title: 'Foto do bot (quadrada)', png: true },
+  card:   { ratio: 2, outW: 1024, title: 'Fundo do cartão (proporção 2:1)' },
+};
+
+/** Retorna os bytes a enviar (ArrayBuffer) ou null se a pessoa cancelar. */
+async function prepareImage(file, spec) {
+  if (!spec || file.type === 'image/gif' || !file.type.startsWith('image/')) return file.arrayBuffer();
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  try {
+    await new Promise((ok, fail) => { img.onload = ok; img.onerror = fail; img.src = url; });
+  } catch { URL.revokeObjectURL(url); return file.arrayBuffer(); } // formato que o navegador não abre: envia como está
+  const iw = img.naturalWidth, ih = img.naturalHeight;
+
+  // miniatura pequena para o fundo desfocado do modo "Encaixar"
+  const tiny = document.createElement('canvas');
+  tiny.width = 24; tiny.height = Math.max(1, Math.round(24 * ih / iw));
+  tiny.getContext('2d').drawImage(img, 0, 0, tiny.width, tiny.height);
+
+  const state = { mode: 'cover', zoom: 1, nx: 0, ny: 0 };
+  const clamp = (W, H) => {
+    const base = state.mode === 'cover' ? Math.max(W / iw, H / ih) : Math.min(W / iw, H / ih);
+    const sc = base * state.zoom;
+    const limX = Math.max(0, (iw * sc - W) / 2 / W), limY = Math.max(0, (ih * sc - H) / 2 / H);
+    state.nx = Math.max(-limX, Math.min(limX, state.nx));
+    state.ny = Math.max(-limY, Math.min(limY, state.ny));
+    return sc;
+  };
+  const render = (cv) => {
+    const W = cv.width, H = cv.height, ctx = cv.getContext('2d');
+    const sc = clamp(W, H);
+    ctx.clearRect(0, 0, W, H);
+    ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+    if (state.mode === 'fit') {
+      const c = Math.max(W / tiny.width, H / tiny.height);
+      ctx.drawImage(tiny, (W - tiny.width * c) / 2, (H - tiny.height * c) / 2, tiny.width * c, tiny.height * c);
+      ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(0, 0, W, H);
+    } else { ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H); }
+    const dw = iw * sc, dh = ih * sc;
+    ctx.drawImage(img, W / 2 + state.nx * W - dw / 2, H / 2 + state.ny * H - dh / 2, dw, dh);
+  };
+
+  return new Promise((resolve) => {
+    const vw = Math.min(window.innerWidth - 56, 520);
+    const pw = Math.round(vw), ph = Math.round(vw / spec.ratio);
+    const cv = h('canvas', { width: pw, height: ph, style: 'width:' + pw + 'px;height:' + ph + 'px;border-radius:8px;background:#000;touch-action:none;cursor:grab;display:block' });
+    const zoom = h('input', { type: 'range', min: 1, max: 4, step: 0.01, value: 1, style: 'width:100%' });
+    const mCover = h('button', { class: 'btn small', type: 'button' }, '✂️ Preencher (cortar)');
+    const mFit = h('button', { class: 'btn ghost small', type: 'button' }, '🖼️ Encaixar inteira');
+    const paint = () => {
+      mCover.className = 'btn small' + (state.mode === 'cover' ? '' : ' ghost');
+      mFit.className = 'btn small' + (state.mode === 'fit' ? '' : ' ghost');
+      render(cv);
+    };
+    const close = (v) => { overlay.remove(); URL.revokeObjectURL(url); resolve(v); };
+    mCover.addEventListener('click', () => { state.mode = 'cover'; state.zoom = 1; state.nx = state.ny = 0; zoom.value = 1; paint(); });
+    mFit.addEventListener('click', () => { state.mode = 'fit'; state.zoom = 1; state.nx = state.ny = 0; zoom.value = 1; paint(); });
+    zoom.addEventListener('input', () => { state.zoom = Number(zoom.value); paint(); });
+    let drag = null;
+    cv.addEventListener('pointerdown', (e) => { drag = { x: e.clientX, y: e.clientY, nx: state.nx, ny: state.ny }; cv.setPointerCapture(e.pointerId); cv.style.cursor = 'grabbing'; });
+    cv.addEventListener('pointermove', (e) => {
+      if (!drag) return;
+      state.nx = drag.nx + (e.clientX - drag.x) / pw; state.ny = drag.ny + (e.clientY - drag.y) / ph; paint();
+    });
+    const end = () => { drag = null; cv.style.cursor = 'grab'; };
+    cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end);
+    const ok = h('button', { class: 'btn green', type: 'button', onclick: async () => {
+      const out = document.createElement('canvas');
+      out.width = spec.outW; out.height = Math.round(spec.outW / spec.ratio);
+      render(out);
+      const blob = await new Promise((r) => out.toBlob(r, spec.png ? 'image/png' : 'image/jpeg', 0.92));
+      if (!blob) { toast('Não consegui ajustar a imagem.', 'err'); return; }
+      close(await blob.arrayBuffer());
+    } }, '✅ Usar esta imagem');
+    const overlay = h('div', { style: 'position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.78);display:grid;place-items:center;padding:14px;overflow:auto' },
+      h('div', { style: 'background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;max-width:100%' },
+        h('h3', { style: 'margin:0 0 4px' }, '🎯 Ajustar imagem'),
+        h('p', { style: 'margin:0 0 10px;color:var(--muted);font-size:13px' }, spec.title + '. Arraste para posicionar e use o zoom.'),
+        cv,
+        h('div', { style: 'display:flex;gap:8px;margin:10px 0 6px;flex-wrap:wrap' }, mCover, mFit),
+        h('label', { style: 'font-size:13px;color:var(--muted)' }, 'Zoom'), zoom,
+        h('div', { style: 'display:flex;gap:8px;margin-top:12px;flex-wrap:wrap' },
+          ok,
+          h('button', { class: 'btn ghost', type: 'button', onclick: () => close(null) }, 'Cancelar'),
+          h('button', { class: 'btn ghost', type: 'button', onclick: async () => close(await file.arrayBuffer()) }, 'Enviar original'))));
+    document.body.append(overlay);
+    paint();
+  });
+}
+
 function filePicker(o, k, round) {
   const box = h('div', { class: 'imgp' });
   const draw = () => {
@@ -656,8 +750,10 @@ function filePicker(o, k, round) {
       if (!f) return;
       if (f.size > 8 * 1024 * 1024) { toast('Imagem muito grande (máx. 8 MB).', 'err'); return; }
       try {
+        const body = await prepareImage(f, IMG_SPEC[k]);
+        if (!body) return; // cancelou o ajuste
         const r = await fetch('/api/guilds/' + st.gid + '/uploads' + (round ? '?round=1' : ''), { method: 'POST', credentials: 'same-origin',
-          headers: { 'Content-Type': 'application/octet-stream' }, body: await f.arrayBuffer() });
+          headers: { 'Content-Type': 'application/octet-stream' }, body });
         const j = await r.json().catch(() => ({}));
         if (!r.ok) throw new Error(j.error || 'Erro ' + r.status);
         o[k] = j.ref; dirty(); draw();
@@ -694,7 +790,7 @@ function tabIdentity() {
     card('🎭 Identidade do bot neste servidor', 'Escolha como o bot aparece só no seu servidor: nome, foto, banner e bio. Em outros servidores ele continua igual.',
       field('Nome (apelido do bot)', tInput(id, 'nick', { ph: 'ex.: Capanga do Chefe', max: 32 }), 'Até 32 caracteres. Vazio = nome padrão.'),
       field('Foto do bot', filePicker(id, 'avatar', false), 'PNG, JPG, GIF ou WEBP, até 8 MB. Imagem quadrada fica melhor.'),
-      field('Banner do bot', filePicker(id, 'banner', false), 'Imagem larga (ex.: 600x240). Aparece no perfil do bot neste servidor.'),
+      field('Banner do bot', filePicker(id, 'banner', false), 'Ao escolher a imagem, abre o ajuste: arraste, dê zoom ou encaixe a imagem inteira. Aparece no perfil do bot neste servidor.'),
       field('Bio (sobre o bot)', tArea(id, 'bio', { rows: 3, max: 190, tools: false }), 'Até 190 caracteres.'),
       h('div', {},
         h('button', { class: 'btn green', onclick: () => run('apply') }, '🎭 Aplicar no servidor'), ' ',
@@ -875,8 +971,10 @@ function imgPicker(o, k, canRound, compress) {
       if (!f) return;
       if (f.size > 8 * 1024 * 1024) { toast('Imagem muito grande (máx. 8 MB).', 'err'); return; }
       try {
+        const body = await prepareImage(f, compress && !wantRound ? IMG_SPEC.card : null);
+        if (!body) return; // cancelou o ajuste
         const r = await fetch('/api/guilds/' + st.gid + '/uploads' + (wantRound ? '?round=1' : compress ? '?bg=1' : ''), { method: 'POST', credentials: 'same-origin',
-          headers: { 'Content-Type': 'application/octet-stream' }, body: await f.arrayBuffer() });
+          headers: { 'Content-Type': 'application/octet-stream' }, body });
         const j = await r.json().catch(() => ({}));
         if (!r.ok) throw new Error(j.error || 'Erro ' + r.status);
         o[k] = j.ref; dirty(); draw(); if (st.onChange) st.onChange();
