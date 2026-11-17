@@ -273,7 +273,7 @@ function msgPreview(text, imgEl) {
 
 /* ---------- abas ---------- */
 const TABS = [
-  ['home', '🏠 Início'], ['welcome', '👋 Boas-vindas'], ['leave', '🚪 Saída'], ['kick', '👢 Expulsão'], ['roles', '🎛️ Cargos / Botões'], ['messages', '📨 Mensagens / Embeds'], ['wiki', '📖 Wiki de Capos'], ['tickets', '🎫 Tickets'], ['telefone', '📞 Telefone Vermelho'], ['autoroles', '🏷️ Autoroles'], ['moderation', '🔨 Moderação'], ['logs', '📜 Logs'],
+  ['home', '🏠 Início'], ['welcome', '👋 Boas-vindas'], ['leave', '🚪 Saída'], ['kick', '👢 Expulsão'], ['roles', '🎛️ Cargos / Botões'], ['reactroles', '🙋 Cargos por reação'], ['alerts', '🔔 Alertas'], ['stats', '📊 Estatísticas'], ['messages', '📨 Mensagens / Embeds'], ['wiki', '📖 Wiki de Capos'], ['tickets', '🎫 Tickets'], ['telefone', '📞 Telefone Vermelho'], ['autoroles', '🏷️ Autoroles'], ['moderation', '🔨 Moderação'], ['logs', '📜 Logs'],
   ['levels', '⭐ Rank / Níveis'], ['commands', '⌨️ Comandos'], ['interaction', '💬 Interação'],
   ['translate', '🌐 Tradução'], ['games', '🎮 Mini jogos'], ['identity', '🎭 Identidade'], ['expressions', '😀 Emojis / Figurinhas'], ['premium', '💎 Premium'],
 ];
@@ -432,6 +432,144 @@ function tabRoles() {
   };
   draw();
   return box;
+}
+
+function tabReactRoles() {
+  const list = st.cfg.reactionRoles;
+  const box = h('div');
+  const draw = () => {
+    box.replaceChildren(
+      !st.data.botCanManageRoles ? h('div', { class: 'warn' }, '⚠️ O bot precisa da permissão "Gerenciar Cargos" e o cargo dele precisa ficar ACIMA dos cargos que ele vai entregar.') : null,
+      list.length ? null : card('🎭 Cargos por reação de emoji', 'O bot publica uma mensagem e coloca os emojis nela. Quem reage com um emoji ganha o cargo; quem tira a reação perde o cargo.'),
+      list.map((p, pi) => {
+        const items = h('div');
+        const drawItems = () => items.replaceChildren(
+          p.items.map((b, bi) => h('div', { class: 'item' },
+            h('div', { class: 'row' },
+              field('Emoji', tInput(b, 'emoji', { ph: '🎮 ou <:nome:123…>', max: 80 })),
+              field('Cargo', sel(b, 'roleId', roleOpts(), { empty: '— cargo —' }))),
+            h('button', { class: 'btn danger small', onclick: () => { p.items.splice(bi, 1); dirty(); drawItems(); } }, 'Remover'))),
+          p.items.length < 20 ? h('button', { class: 'btn ghost', onclick: () => { p.items.push({ emoji: '', roleId: '' }); dirty(); drawItems(); } }, '+ Adicionar emoji') : null);
+        drawItems();
+        const publish = async () => {
+          try {
+            await save();
+            const r = await api('/api/guilds/' + st.gid + '/reactionroles/' + p.id + '/publish', { method: 'POST' });
+            toast(r.failed && r.failed.length ? 'Publicado, mas o Discord não aceitou: ' + r.failed.join(' ') + ' (use emojis normais ou de servidores onde o bot está).' : 'Publicado no Discord!', r.failed && r.failed.length ? 'err' : 'ok');
+            await reloadData(false);
+          } catch (e) { toast(e.message, 'err'); }
+        };
+        return h('div', { class: 'card' },
+          h('h3', {}, '🎭 ' + (p.name || 'Cargos por reação')),
+          h('div', { class: 'row' },
+            field('Nome interno', tInput(p, 'name', { max: 60 })),
+            field('Canal onde publicar', sel(p, 'channelId', chOpts())),
+            field('Modo', sel(p, 'mode', [{ v: 'toggle', t: 'Vários cargos (reagir liga, tirar desliga)' }, { v: 'single', t: 'Escolha única (troca o cargo)' }], { empty: null }))),
+          chk(p, 'useEmbed', 'Usar caixa (embed) colorida'),
+          h('div', { class: 'row' },
+            field('Título', tInput(p, 'title', { max: 256 })),
+            field('Cor do embed', cInput(p, 'color'))),
+          field('Texto da mensagem', tArea(p, 'content', { rows: 3 }), 'A lista "emoji → cargo" é adicionada automaticamente embaixo do texto.'),
+          h('div', { class: 'lbl', style: 'margin-top:10px;font-size:12px;font-weight:700;color:#b5bac1' }, 'EMOJIS E CARGOS'),
+          items,
+          h('div', { class: 'dbtns', style: 'margin-top:14px' },
+            h('button', { class: 'btn green', onclick: publish }, p.messageId ? '🔄 Atualizar mensagem no Discord' : '📤 Publicar no Discord'),
+            h('button', { class: 'btn danger', onclick: () => { if (confirm('Remover este painel? (a mensagem já publicada continua no Discord, mas as reações deixam de dar cargo)')) { list.splice(pi, 1); dirty(); draw(); } } }, 'Remover painel')));
+      }),
+      list.length < 10 ? h('button', { class: 'btn', onclick: () => {
+        list.push({ id: Math.random().toString(36).slice(2, 10), name: 'Painel ' + (list.length + 1), channelId: '', messageId: '', useEmbed: true, title: 'Escolha seus cargos', content: 'Reaja com o emoji para pegar o cargo. Tire a reação para remover.', color: '#5865f2', mode: 'toggle', items: [] });
+        dirty(); draw();
+      } }, '+ Novo painel por reação') : null);
+  };
+  draw();
+  return box;
+}
+
+function tabStats() {
+  const s = st.cfg.stats;
+  const catOpts = (st.data.categories || []).map((c) => ({ v: c.id, t: '📁 ' + c.name }));
+  const voiceOpts = (st.data.voice || []).map((c) => ({ v: c.id, t: '🔊 ' + c.name }));
+  const TYPES = [
+    { v: 'members', t: '👥 Total de membros' }, { v: 'humans', t: '🙂 Só pessoas (sem bots)' }, { v: 'bots', t: '🤖 Só bots' },
+    { v: 'boosts', t: '🚀 Impulsos (boosts)' }, { v: 'channels', t: '💬 Quantidade de canais' }, { v: 'roles', t: '🏷️ Quantidade de cargos' },
+    { v: 'role', t: '🎖️ Membros com um cargo' },
+  ];
+  const box = h('div');
+  const typeSel = (m) => { const e = sel(m, 'type', TYPES, { empty: null }); e.dataset.redraw = '1'; return e; };
+  const draw = () => box.replaceChildren(
+    s.items.map((m, i) => h('div', { class: 'item' },
+      h('div', { class: 'row' },
+        field('O que mostrar', typeSel(m)),
+        field('Nome do canal', tInput(m, 'name', { ph: '👥 Membros: {count}', max: 90 }), 'Use {count} onde o número deve aparecer.')),
+      m.type === 'role' ? field('Cargo a contar', sel(m, 'roleId', roleOpts(), { empty: '— cargo —' })) : null,
+      field('Canal de voz', sel(m, 'channelId', voiceOpts, { empty: '🆕 Criar automaticamente (trancado, ninguém entra)' })),
+      h('button', { class: 'btn danger small', onclick: () => { s.items.splice(i, 1); dirty(); draw(); } }, 'Remover da lista (o canal não é apagado)'))),
+    s.items.length < 10 ? h('button', { class: 'btn ghost', onclick: () => { s.items.push({ id: Math.random().toString(36).slice(2, 10), type: 'members', roleId: '', channelId: '', name: '👥 Membros: {count}' }); dirty(); draw(); } }, '+ Adicionar contador') : null);
+  box.addEventListener('change', (e) => { if (e.target.dataset && e.target.dataset.redraw) draw(); });
+  draw();
+  const apply = async () => {
+    try {
+      await save();
+      const r = await api('/api/guilds/' + st.gid + '/stats/refresh', { method: 'POST' });
+      const bad = (r.results || []).filter((x) => !x.ok);
+      toast(bad.length ? 'Algo falhou: ' + bad[0].error + ' (o bot precisa de "Gerenciar Canais")' : 'Canais criados/atualizados!', bad.length ? 'err' : 'ok');
+      await reloadData(false);
+    } catch (e) { toast(e.message, 'err'); }
+  };
+  return h('div', {},
+    card('📊 Estatísticas do servidor', 'Canais de voz trancados que mostram um número, por exemplo "👥 Membros: 152". O bot atualiza sozinho a cada 10 minutos (limite do Discord).',
+      chk(s, 'enabled', 'Estatísticas ligadas'),
+      field('Categoria dos canais criados (opcional)', sel(s, 'categoryId', catOpts, { empty: '— sem categoria —' })),
+      st.data.botCanManageChannels === false ? h('div', { class: 'warn' }, '⚠️ O bot precisa da permissão "Gerenciar Canais".') : null),
+    card('Contadores', 'Marque quais números aparecem. Depois clique em "Salvar e aplicar agora".', box,
+      h('div', { class: 'dbtns', style: 'margin-top:12px' }, h('button', { class: 'btn green', onclick: apply }, '💾 Salvar e aplicar agora'))));
+}
+
+function tabAlerts() {
+  const a = st.cfg.alerts;
+  const PLAT = [{ v: 'youtube', t: '📺 YouTube (vídeo novo)' }, { v: 'twitch', t: '🟣 Twitch (live)' }, { v: 'kick', t: '🟢 Kick (live)' }];
+  const MSG = { youtube: '📺 **{name}** publicou um vídeo novo!\n{title}\n{url}', twitch: '🔴 **{name}** está AO VIVO na Twitch!\n{title}\n{url}', kick: '🟢 **{name}** está AO VIVO na Kick!\n{title}\n{url}' };
+  const PH = { youtube: 'https://www.youtube.com/@canal', twitch: 'https://twitch.tv/canal', kick: 'https://kick.com/canal' };
+  const keys = st.data.alertKeys || {};
+  const box = h('div');
+  const platSel = (m) => {
+    const e = sel(m, 'platform', PLAT, { empty: null });
+    let prev = m.platform;
+    e.addEventListener('change', () => { if (!m.message || m.message === MSG[prev]) m.message = MSG[m.platform]; prev = m.platform; draw(); });
+    return e;
+  };
+  const draw = () => box.replaceChildren(
+    a.items.map((m, i) => {
+      const test = async () => {
+        try {
+          await save();
+          const r = await api('/api/guilds/' + st.gid + '/alerts/' + m.id + '/test', { method: 'POST' });
+          toast('Funcionou! Canal encontrado: ' + r.found + '. Veja o aviso de teste no Discord.', 'ok');
+        } catch (e) { toast(e.message, 'err'); }
+      };
+      return h('div', { class: 'item' },
+        h('div', { class: 'row' },
+          field('Plataforma', platSel(m)),
+          field('Link ou @ do canal', tInput(m, 'target', { ph: PH[m.platform], max: 200 }))),
+        h('div', { class: 'row' },
+          field('Canal do Discord para o aviso', sel(m, 'channelId', chOpts())),
+          field('Cargo a mencionar (opcional)', sel(m, 'roleId', roleOpts(), { empty: '— ninguém —' })),
+          field('Nome a mostrar (opcional)', tInput(m, 'name', { ph: 'nome do criador', max: 80 }))),
+        field('Mensagem', tArea(m, 'message', { rows: 3, max: 1000, vars: ['{name}', '{title}', '{url}', '{game}', '{role}'] })),
+        m.platform === 'kick' && !keys.kick ? h('div', { class: 'warn' }, 'ℹ️ A Kick bloqueia consultas de bots com frequência. Se o teste falhar, o dono do bot precisa configurar KICK_CLIENT_ID e KICK_CLIENT_SECRET.') : null,
+        h('div', { class: 'dbtns' },
+          h('button', { class: 'btn green small', onclick: test }, '🧪 Salvar e testar'),
+          h('button', { class: 'btn danger small', onclick: () => { a.items.splice(i, 1); dirty(); draw(); } }, 'Remover')));
+    }),
+    a.items.length < 20 ? h('button', { class: 'btn ghost', onclick: () => { a.items.push({ id: Math.random().toString(36).slice(2, 10), platform: 'youtube', target: '', name: '', channelId: '', roleId: '', message: MSG.youtube }); dirty(); draw(); } }, '+ Adicionar alerta') : null);
+  draw();
+  return h('div', {},
+    card('🔔 Alertas de YouTube, Twitch e Kick', 'O bot avisa no canal escolhido quando sair um vídeo novo (YouTube) ou quando a live começar (Twitch e Kick). Ele checa a cada 5 minutos. Ao criar um alerta, o que já existe não gera aviso — só o que for novo.',
+      chk(a, 'enabled', 'Alertas ligados'), box),
+    card('📖 Dicas', null, h('ul', { class: 'cl' },
+      h('li', {}, 'Cole o link do canal (ex.: youtube.com/@nome) ou só o @nome. Use "Salvar e testar" para conferir.'),
+      h('li', {}, 'Na mensagem, {title} é o título, {url} o link, {name} o nome do criador e {role} o cargo marcado.'),
+      h('li', {}, 'Twitch: ' + (keys.twitch ? 'usando a API oficial.' : 'funciona sem chave por um serviço gratuito; para mais estabilidade o dono do bot pode configurar TWITCH_CLIENT_ID e TWITCH_CLIENT_SECRET.')))));
 }
 
 function tabAutoroles() {
@@ -631,6 +769,9 @@ function tabNotice(tab) {
     leave: '💎 No plano grátis o bot envia só a mensagem de texto. O cartão com imagem é Premium.',
     kick: '💎 No plano grátis o bot envia só a mensagem de texto. O cartão com imagem é Premium.',
     roles: '💎 Plano grátis: até ' + (pm.maxPanelButtons) + ' botões por painel e ' + (q.panelPublishes ? q.panelPublishes.limit : '') + ' publicações por mês (' + use('panelPublishes') + ').',
+    reactroles: '💎 Plano grátis: até ' + (pm.limits.reactionItems) + ' emojis por painel e ' + (q.panelPublishes ? q.panelPublishes.limit : '') + ' publicações por mês (' + use('panelPublishes') + ').',
+    alerts: '💎 Plano grátis: até ' + (pm.limits.alerts) + ' alertas.',
+    stats: '💎 Plano grátis: até ' + (pm.limits.statsChannels) + ' canais de estatísticas.',
     messages: '💎 Plano grátis: ' + (q.messagePublishes ? q.messagePublishes.limit : '') + ' publicações por mês (' + use('messagePublishes') + ').',
     wiki: '💎 Plano grátis: ' + (q.wikiPublishes ? q.wikiPublishes.limit : '') + ' publicação da lista por mês (' + use('wikiPublishes') + ').',
     tickets: '💎 Plano grátis: até ' + pm.limits.ticketTypes + ' tipos de ticket e sem transcrição .txt.',
@@ -1430,7 +1571,7 @@ function tabExpressions() {
     log, gallery);
 }
 
-const TAB_FN = { home: tabHome, messages: tabMessages, wiki: tabWiki, tickets: tabTickets, telefone: tabTelefone, autoroles: tabAutoroles, moderation: tabModeration, logs: tabLogs, welcome: () => tabCard('welcome'), leave: () => tabCard('leave'), kick: () => tabCard('kick'), roles: tabRoles, levels: tabLevels, commands: tabCommands, interaction: tabInteraction, translate: tabTranslate, games: tabGames, identity: tabIdentity, expressions: tabExpressions, premium: tabPremium };
+const TAB_FN = { home: tabHome, messages: tabMessages, wiki: tabWiki, tickets: tabTickets, telefone: tabTelefone, autoroles: tabAutoroles, moderation: tabModeration, logs: tabLogs, welcome: () => tabCard('welcome'), leave: () => tabCard('leave'), kick: () => tabCard('kick'), roles: tabRoles, reactroles: tabReactRoles, alerts: tabAlerts, stats: tabStats, levels: tabLevels, commands: tabCommands, interaction: tabInteraction, translate: tabTranslate, games: tabGames, identity: tabIdentity, expressions: tabExpressions, premium: tabPremium };
 
 /* ---------- salvar / carregar ---------- */
 async function save() {

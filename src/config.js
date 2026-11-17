@@ -85,6 +85,9 @@ function defaults() {
     panels: [],
     messages: [],
     autoroles: { memberRoleIds: [], botRoleIds: [] },
+    reactionRoles: [],
+    stats: { enabled: false, categoryId: '', items: [] },
+    alerts: { enabled: false, items: [] },
     identity: { nick: '', avatar: '', banner: '', bio: '' },
     moderation: {
       staffRoleIds: [],
@@ -295,6 +298,91 @@ function sanitizeAutoroles(a) {
   return { memberRoleIds: idList(a.memberRoleIds, 10), botRoleIds: idList(a.botRoleIds, 10) };
 }
 
+// Cargos por reação de emoji
+function sanitizeReactionRoles(list, old) {
+  const oldMap = new Map((old?.reactionRoles || []).map((p) => [p.id, p]));
+  const used = new Set();
+  return arr(list, 10).map((p) => {
+    p = p && typeof p === 'object' ? p : {};
+    let id = typeof p.id === 'string' && /^[a-z0-9]{4,12}$/.test(p.id) ? p.id : newId();
+    while (used.has(id)) id = newId();
+    used.add(id);
+    const seen = new Set();
+    const items = [];
+    for (const b of arr(p.items, 20)) {
+      const roleId = sid(b?.roleId);
+      const emoji = str(b?.emoji, 80).trim();
+      if (!roleId || !emoji || seen.has(emoji)) continue;
+      seen.add(emoji);
+      items.push({ roleId, emoji });
+    }
+    return {
+      id,
+      name: str(p.name, 60, 'Cargos por reação'),
+      channelId: sid(p.channelId),
+      messageId: oldMap.get(id)?.messageId || '',
+      useEmbed: bool(p.useEmbed, true),
+      title: str(p.title, 256),
+      content: str(p.content, 2000),
+      color: col(p.color, '#5865f2'),
+      mode: oneOf(p.mode, ['toggle', 'single'], 'toggle'),
+      items,
+    };
+  });
+}
+
+// Estatísticas do servidor (canais de voz com contador)
+const STAT_TYPES = ['members', 'humans', 'bots', 'boosts', 'channels', 'roles', 'role'];
+function sanitizeStats(x, old) {
+  x = x && typeof x === 'object' ? x : {};
+  const oldItems = new Map((old?.stats?.items || []).map((m) => [m.id, m]));
+  const used = new Set();
+  return {
+    enabled: bool(x.enabled, false),
+    categoryId: sid(x.categoryId),
+    items: arr(x.items, 10).map((m) => {
+      m = m && typeof m === 'object' ? m : {};
+      let id = typeof m.id === 'string' && /^[a-z0-9]{4,12}$/.test(m.id) ? m.id : newId();
+      while (used.has(id)) id = newId();
+      used.add(id);
+      const type = oneOf(m.type, STAT_TYPES, 'members');
+      return {
+        id,
+        type,
+        roleId: type === 'role' ? sid(m.roleId) : '',
+        channelId: sid(m.channelId) || oldItems.get(id)?.channelId || '',
+        name: str(m.name, 90, '👥 Membros: {count}').trim() || '👥 Membros: {count}',
+      };
+    }),
+  };
+}
+
+// Alertas de YouTube / Twitch / Kick
+const ALERT_DEFAULT = { youtube: '📺 **{name}** publicou um vídeo novo!\n{title}\n{url}', twitch: '🔴 **{name}** está AO VIVO na Twitch!\n{title}\n{url}', kick: '🟢 **{name}** está AO VIVO na Kick!\n{title}\n{url}' };
+function sanitizeAlerts(x, old) {
+  x = x && typeof x === 'object' ? x : {};
+  const used = new Set();
+  return {
+    enabled: bool(x.enabled, false),
+    items: arr(x.items, 20).map((m) => {
+      m = m && typeof m === 'object' ? m : {};
+      let id = typeof m.id === 'string' && /^[a-z0-9]{4,12}$/.test(m.id) ? m.id : newId();
+      while (used.has(id)) id = newId();
+      used.add(id);
+      const platform = oneOf(m.platform, ['youtube', 'twitch', 'kick'], 'youtube');
+      return {
+        id,
+        platform,
+        target: str(m.target, 200).trim(),
+        name: str(m.name, 80).trim(),
+        channelId: sid(m.channelId),
+        roleId: sid(m.roleId),
+        message: str(m.message, 1000, ALERT_DEFAULT[platform]).trim() || ALERT_DEFAULT[platform],
+      };
+    }),
+  };
+}
+
 // Identidade do bot neste servidor (só imagens enviadas pelo painel).
 function sanitizeIdentity(x) {
   x = x && typeof x === 'object' ? x : {};
@@ -496,6 +584,9 @@ function sanitize(input, old) {
   out.telefone = sanitizeTelefone(i.telefone, old);
   out.logs = sanitizeLogs(i.logs);
   out.autoroles = sanitizeAutoroles(i.autoroles);
+  out.reactionRoles = sanitizeReactionRoles(i.reactionRoles, old);
+  out.stats = sanitizeStats(i.stats, old);
+  out.alerts = sanitizeAlerts(i.alerts, old);
   out.identity = sanitizeIdentity(i.identity);
   out.moderation = sanitizeModeration(i.moderation);
 
@@ -610,6 +701,9 @@ function applyLimits(guildId, clean) {
   if (words && words.length > pk.words) { words.length = pk.words; notes.push('Automod: o plano grátis permite ' + pk.words + ' palavras proibidas (as extras não foram salvas).'); }
   const cap = (list, n, what) => { if (Array.isArray(list) && list.length > n) { list.length = n; notes.push(what + ': o plano grátis permite ' + n + ' (os extras não foram salvos).'); } };
   for (const p of clean.panels || []) cap(p.buttons, pk.panelButtons, 'Painel de cargos "' + (p.name || p.title || 'sem nome') + '" botões');
+  for (const p of clean.reactionRoles || []) cap(p.items, pk.reactionItems, 'Cargos por reação "' + (p.name || 'sem nome') + '"');
+  cap(clean.stats?.items, pk.statsChannels, 'Canais de estatísticas');
+  cap(clean.alerts?.items, pk.alerts, 'Alertas');
   cap(clean.commands?.list, pk.customCommands, 'Comandos personalizados');
   cap(clean.interaction?.triggers, pk.triggers, 'Respostas automáticas');
   cap(clean.interaction?.reactions, pk.reactions, 'Reações automáticas');
@@ -689,4 +783,19 @@ function setPanelMessage(guildId, panelId, messageId) {
   db.save();
 }
 
-module.exports = { defaults, getConfig, setConfig, validate, setPanelMessage, setMessageRef, setWikiListIds, setTicketPanelMessage, nextTicketNumber, nextTelefoneNumber, setTelefoneBlocked, newId };
+function setReactionMessage(guildId, id, messageId) {
+  const p = getConfig(guildId).reactionRoles.find((x) => x.id === id);
+  if (!p) return;
+  p.messageId = messageId;
+  db.data.guilds[guildId] = getConfig(guildId);
+  db.save();
+}
+function setStatsChannel(guildId, id, channelId) {
+  const m = getConfig(guildId).stats.items.find((x) => x.id === id);
+  if (!m) return;
+  m.channelId = channelId;
+  db.data.guilds[guildId] = getConfig(guildId);
+  db.save();
+}
+
+module.exports = { setReactionMessage, setStatsChannel, ALERT_DEFAULT, defaults, getConfig, setConfig, validate, setPanelMessage, setMessageRef, setWikiListIds, setTicketPanelMessage, nextTicketNumber, nextTelefoneNumber, setTelefoneBlocked, newId };

@@ -14,6 +14,9 @@ const identity = require('./identity');
 const expressions = require('./expressions');
 const premium = require('./premium');
 const pix = require('./pix');
+const reactroles = require('./reactroles');
+const stats = require('./stats');
+const alertas = require('./alertas');
 const { renderCard } = require('./card');
 const { LANGS } = require('./translate');
 
@@ -136,7 +139,7 @@ function startWeb(bot) {
     price: premium.price(),
     days: premium.planDays(),
     perks: premium.perkLines(),
-    limits: { ticketTypes: premium.perks(gid).ticketTypes, words: premium.perks(gid).words, levelCard: premium.perks(gid).levelCard },
+    limits: { reactionItems: premium.perks(gid).reactionItems, alerts: premium.perks(gid).alerts, statsChannels: premium.perks(gid).statsChannels, ticketTypes: premium.perks(gid).ticketTypes, words: premium.perks(gid).words, levelCard: premium.perks(gid).levelCard },
     features: ['welcomeCard', 'autoroles', 'moderation', 'logs', 'levelCard', 'ticketTranscript', 'duelBoss', 'identity', 'telefone'].reduce((o, k) => ({ ...o, [k]: !!premium.perks(gid)[k] }), {}),
     quotas: ['panelPublishes', 'messagePublishes', 'wikiPublishes', 'translationsDay', 'gamesDay'].reduce((o, k) => {
       const q = premium.quota(gid, k);
@@ -242,6 +245,10 @@ function startWeb(bot) {
       .filter((c) => c.type === ChannelType.GuildText || c.type === ChannelType.GuildAnnouncement)
       .sort((a, b) => a.rawPosition - b.rawPosition)
       .map((c) => ({ id: c.id, name: c.name }));
+    const voice = guild.channels.cache
+      .filter((c) => c.type === ChannelType.GuildVoice)
+      .sort((a, b) => a.rawPosition - b.rawPosition)
+      .map((c) => ({ id: c.id, name: c.name }));
     const categories = guild.channels.cache
       .filter((c) => c.type === ChannelType.GuildCategory)
       .sort((a, b) => a.rawPosition - b.rawPosition)
@@ -258,9 +265,12 @@ function startWeb(bot) {
       config: cfgs.getConfig(guild.id),
       channels,
       categories,
+      voice,
+      alertKeys: { twitch: !!(process.env.TWITCH_CLIENT_ID && process.env.TWITCH_CLIENT_SECRET), kick: !!(process.env.KICK_CLIENT_ID && process.env.KICK_CLIENT_SECRET) },
       members,
       roles,
       botCanManageRoles: me.permissions.has(PermissionFlagsBits.ManageRoles),
+      botCanManageChannels: me.permissions.has(PermissionFlagsBits.ManageChannels),
       premium: premiumState(guild.id),
       isBotOwner: isBotOwner(req),
     });
@@ -343,6 +353,35 @@ function startWeb(bot) {
       const link = await bot.publishPanel(req.guild.id, req.params.panelId);
       premium.consume(req.guild.id, 'panelPublishes');
       res.json({ ok: true, url: link });
+    } catch (e) {
+      res.status(400).json({ error: e.message });
+    }
+  }));
+
+  app.post('/api/guilds/:id/reactionroles/:panelId/publish', requireAuth, guildAccess, wrap(async (req, res) => {
+    try {
+      if (!premium.quota(req.guild.id, 'panelPublishes').ok) return res.status(403).json({ error: premium.quotaMsg(req.guild.id, 'panelPublishes') });
+      const r = await reactroles.publish(bot.client, req.guild.id, req.params.panelId);
+      premium.consume(req.guild.id, 'panelPublishes');
+      res.json({ ok: true, url: r.url, failed: r.failed });
+    } catch (e) {
+      res.status(400).json({ error: e.message });
+    }
+  }));
+
+  app.post('/api/guilds/:id/stats/refresh', requireAuth, guildAccess, wrap(async (req, res) => {
+    try {
+      if (!cfgs.getConfig(req.guild.id).stats.enabled) return res.status(400).json({ error: 'Ligue as estatísticas e salve antes.' });
+      const results = await stats.refresh(bot.client, req.guild.id);
+      res.json({ ok: true, results, config: cfgs.getConfig(req.guild.id).stats });
+    } catch (e) {
+      res.status(400).json({ error: e.message });
+    }
+  }));
+
+  app.post('/api/guilds/:id/alerts/:itemId/test', requireAuth, guildAccess, rateLimit({ windowMs: 60_000, limit: 12 }), wrap(async (req, res) => {
+    try {
+      res.json({ ok: true, ...(await alertas.test(bot.client, req.guild.id, req.params.itemId)) });
     } catch (e) {
       res.status(400).json({ error: e.message });
     }

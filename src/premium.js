@@ -54,6 +54,9 @@ const PERKS = {
   identity: true,      // nome, foto, banner e bio do bot no servidor
   telefone: true,      // Telefone Vermelho (atendimento por mensagem privada)
   panelButtons: 25,    // botões por painel de cargos
+  reactionItems: 20,   // emojis por painel de cargos por reação
+  statsChannels: 10,   // canais de estatísticas
+  alerts: 20,          // alertas YouTube/Twitch/Kick
   panelPublishes: Infinity,   // publicações de painel de cargos por mês
   messagePublishes: Infinity, // publicações de mensagens/embeds por mês
   wikiPublishes: Infinity,    // publicações da lista da wiki por mês
@@ -67,6 +70,7 @@ const FREE = {
   chatXp: 1, rpgCash: 1, rpgXp: 1, bossTries: 3, ticketTypes: 3, words: 30, levelCard: false,
   welcomeCard: false, autoroles: false, moderation: false, logs: false, ticketTranscript: false, duelBoss: false,
   identity: false, telefone: false,
+  reactionItems: 3, statsChannels: 2, alerts: 2,
   panelButtons: 3, panelPublishes: 2, messagePublishes: 2, wikiPublishes: 1,
   customCommands: 5, triggers: 5, reactions: 5, translationsDay: 20, gamesDay: 30,
 };
@@ -170,6 +174,8 @@ function perkLines() {
     '📖 Wiki de Capos: publicações ilimitadas (grátis: ' + FREE.wikiPublishes + '/mês)',
     '🎫 Até ' + PERKS.ticketTypes + ' tipos de ticket e transcrição (grátis: ' + FREE.ticketTypes + ' tipos, sem transcrição)',
     '🏷️ Autoroles, 🔨 Moderação com automod e 📜 Logs (exclusivos Premium)',
+    '🔔 Alertas de YouTube, Twitch e Kick: até ' + PERKS.alerts + ' (grátis: ' + FREE.alerts + ')',
+    '📊 Estatísticas do servidor: até ' + PERKS.statsChannels + ' canais (grátis: ' + FREE.statsChannels + ') e 🎭 cargos por reação: ' + PERKS.reactionItems + ' emojis por painel (grátis: ' + FREE.reactionItems + ')',
     '📞 Telefone Vermelho: atendimento por mensagem privada, estilo ModMail (exclusivo Premium)',
     '⭐ +' + Math.round((PERKS.chatXp - 1) * 100) + '% de XP e cartão de rank no aviso de nível',
     '⌨️ Comandos personalizados e 💬 interação: até ' + PERKS.customCommands + ' de cada (grátis: ' + FREE.customCommands + ')',
