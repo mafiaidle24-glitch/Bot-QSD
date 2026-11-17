@@ -2,7 +2,7 @@
   "name": "Painel do Bot QSD",
   "short_name": "Bot QSD",
   "description": "Painel de configuração do bot QSD",
-  "start_url": "/",
+  "start_url": "/painel",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
