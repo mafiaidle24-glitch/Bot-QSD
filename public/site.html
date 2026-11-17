@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BOT QSD — bot multifuncional para Discord</title>
+<meta name="description" content="Bot de Discord em português: boas-vindas com cartão, tickets, Telefone Vermelho, moderação, níveis, cargos, alertas de YouTube/Twitch/Kick, estatísticas, mini jogos e RPG da máfia.">
+<meta name="theme-color" content="#1e1f22">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" type="image/png" href="/icon-192.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<style>
+:root{--bg:#2b2d31;--bg2:#232428;--card:#313338;--line:#3f4147;--text:#f2f3f5;--muted:#a8acb4;--blue:#5865f2;--green:#1f9d55;--link:#9aa8ff}
+:root[data-theme=light]{--bg:#f4f5f7;--bg2:#ffffff;--card:#ffffff;--line:#dcdfe4;--text:#1d1f24;--muted:#5b616b;--link:#4752c4}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:70px}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.55 "Segoe UI",system-ui,-apple-system,sans-serif}
+a{color:var(--link)}
+.bar{position:sticky;top:0;z-index:30;display:flex;align-items:center;height:56px;padding:0 16px;background:var(--bg2);border-bottom:1px solid var(--line)}
+.bar .brand{position:absolute;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:8px;font-weight:700;font-size:20px;color:var(--text);text-decoration:none}
+.bar .brand img{width:30px;height:30px;border-radius:50%}
+.bar .login{margin-left:auto;font-weight:600;font-size:14px;color:var(--text);text-decoration:none}
+.burger{background:none;border:0;padding:8px;margin-left:-8px;cursor:pointer;color:var(--text);display:grid;gap:4px}
+.burger i{display:block;width:20px;height:2px;background:currentColor;border-radius:2px}
+.drawer{position:fixed;left:0;right:0;top:56px;z-index:29;background:var(--bg2);border-bottom:1px solid var(--line);padding:6px 20px 16px;display:none;max-height:calc(100vh - 56px);overflow:auto}
+.drawer.open{display:block}
+.drawer a,.drawer summary{display:block;padding:11px 0;color:var(--text);text-decoration:none;font-size:14px;font-weight:600;cursor:pointer;list-style:none}
+.drawer summary::-webkit-details-marker{display:none}
+.drawer summary:after{content:" ▾";color:var(--muted)}
+.drawer details a{padding:8px 0 8px 14px;font-weight:500;color:var(--muted)}
+.drawer .row{display:flex;align-items:center;gap:14px;margin-top:6px}
+.pill{display:inline-block;background:var(--green);color:#fff!important;border-radius:6px;padding:4px 10px!important;font-size:12px!important}
+.theme{background:none;border:1px solid var(--line);border-radius:8px;padding:5px 10px;cursor:pointer;color:var(--text)}
+.hero{text-align:center;padding:56px 20px 64px;background:linear-gradient(180deg,var(--bg2),var(--bg))}
+.hero img.av{width:120px;height:120px;border-radius:50%;border:4px solid var(--line);background:var(--card)}
+.hero h1{font-size:48px;margin:14px 0 6px;letter-spacing:-.5px}
+.hero p{max-width:560px;margin:0 auto 22px;color:var(--muted);font-size:17px}
+.btns{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+.btn{display:inline-block;border-radius:8px;padding:11px 18px;font-weight:600;text-decoration:none;background:var(--card);color:var(--text);border:1px solid var(--line)}
+.btn.main{background:var(--blue);border-color:var(--blue);color:#fff}
+.btn:hover{filter:brightness(1.12)}
+.stats{display:flex;justify-content:center;gap:28px;flex-wrap:wrap;margin-top:30px;color:var(--muted);font-size:14px}
+.stats b{display:block;font-size:26px;color:var(--text)}
+main{max-width:860px;margin:0 auto;padding:10px 16px 40px}
+section.box{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:26px 22px;margin:18px 0;text-align:center}
+section.box h2{margin:0 0 10px;font-size:26px}
+section.box>p{color:var(--muted);margin:0 auto;max-width:640px}
+.chips{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:16px}
+.chips span{background:var(--bg2);border:1px solid var(--line);border-radius:999px;padding:5px 12px;font-size:13px}
+.cmds{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:8px;margin-top:16px;text-align:left}
+.cmds div{background:var(--bg2);border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-size:14px}
+.cmds code{color:var(--link);font-weight:700}
+.cmds small{display:block;color:var(--muted)}
+.perks{list-style:none;padding:0;margin:16px auto 0;max-width:640px;text-align:left}
+.perks li{padding:7px 0;border-bottom:1px solid var(--line);font-size:15px}
+.price{font-size:38px;font-weight:800;margin:8px 0 0}
+.price small{font-size:15px;font-weight:500;color:var(--muted)}
+.ok{display:inline-block;width:10px;height:10px;border-radius:50%;background:#3ba55d;margin-right:6px}
+.bad{background:#ed4245}
+footer{text-align:center;color:var(--muted);font-size:13px;padding:26px 16px 50px}
+@media(max-width:520px){.hero h1{font-size:38px}}
+</style>
+</head>
+<body>
+<header class="bar">
+  <button class="burger" id="burger" aria-label="Abrir menu"><i></i><i></i><i></i></button>
+  <a class="brand" href="/"><img id="logo" src="/icon-192.png" alt=""><span id="bname">BOT QSD</span></a>
+  <a class="login" href="/auth/login">Login</a>
+</header>
+<nav class="drawer" id="drawer">
+  <a href="/painel">Painel</a>
+  <a id="mInvite" href="#">Convide-me</a>
+  <a id="mSupport" href="#">Entre no Meu Servidor</a>
+  <a href="#status">Status</a>
+  <a href="#comandos">Comandos</a>
+  <details>
+    <summary>Funcionalidades</summary>
+    <a href="#boasvindas">Boas-vindas</a>
+    <a href="#atendimento">Tickets e Telefone Vermelho</a>
+    <a href="#moderacao">Moderação e Logs</a>
+    <a href="#niveis">Níveis</a>
+    <a href="#cargos">Cargos e Autoroles</a>
+    <a href="#alertas">Alertas e Estatísticas</a>
+    <a href="#jogos">Mini jogos e RPG</a>
+    <a href="#traducao">Tradução</a>
+  </details>
+  <div class="row"><a class="pill" href="#premium">✨ Premium</a><button class="theme" id="theme" aria-label="Trocar tema">🌙</button></div>
+</nav>
+
+<section class="hero">
+  <img class="av" id="avatar" src="/icon-512.png" alt="">
+  <h1 id="hname">BOT QSD</h1>
+  <p>Um bot multifuncional e configurável para o seu Discord, em português — tudo pelo painel, sem precisar de comandos.</p>
+  <div class="btns">
+    <a class="btn" id="bInvite" href="#">➕ Adicionar ao Discord</a>
+    <a class="btn main" href="/painel">⚙️ Configurar Servidores</a>
+  </div>
+  <div class="stats">
+    <div><b id="sServers">—</b>servidores</div>
+    <div><b id="sMembers">—</b>membros</div>
+  </div>
+</section>
+
+<main>
+  <section class="box" id="boasvindas">
+    <h2>👋 Boas-vindas e saída</h2>
+    <p>Mensagens de boas-vindas, saída e expulsão com cartões personalizados: texto, imagem de fundo, cores e título do seu jeito. Também entrega cargos automáticos para quem entra.</p>
+    <div class="chips"><span>Cartão com imagem</span><span>Autoroles</span><span>Mensagem de saída</span><span>Aviso de expulsão</span></div>
+  </section>
+
+  <section class="box" id="atendimento">
+    <h2>🎫 Tickets e 📞 Telefone Vermelho</h2>
+    <p>Painel de tickets com vários tipos de atendimento e transcrição. No Telefone Vermelho, o membro fala com a equipe pelo privado do bot, estilo ModMail, e a equipe responde por um canal privado do servidor.</p>
+    <div class="chips"><span>Tipos de ticket</span><span>Transcrição .txt</span><span>Notas internas</span><span>Bloquear abusos</span></div>
+  </section>
+
+  <section class="box" id="moderacao">
+    <h2>🔨 Moderação e 📜 Logs</h2>
+    <p>Avisos, castigos e banimentos, automod contra spam, convites e palavras proibidas, e logs completos num canal só da equipe.</p>
+    <div class="chips"><span>/warn</span><span>Automod</span><span>Punição automática</span><span>Logs de mensagens e cargos</span></div>
+  </section>
+
+  <section class="box" id="niveis">
+    <h2>⭐ Níveis e rank</h2>
+    <p>XP por mensagem, rank, cartão de rank no aviso de novo nível e cargos de recompensa por nível. Você controla o XP, o intervalo e os canais ignorados.</p>
+  </section>
+
+  <section class="box" id="cargos">
+    <h2>🎛️ Cargos por botão e por emoji</h2>
+    <p>Painéis onde o membro pega cargos clicando em botões ou reagindo com um emoji. Escolha entre vários cargos ou escolha única.</p>
+  </section>
+
+  <section class="box" id="alertas">
+    <h2>🔔 Alertas e 📊 Estatísticas</h2>
+    <p>Avisos no canal quando sair vídeo no YouTube ou quando uma live começar na Twitch ou na Kick. Canais de voz que mostram, ao vivo, a quantidade de membros e outros números do servidor.</p>
+    <div class="chips"><span>YouTube</span><span>Twitch</span><span>Kick</span><span>Contador de membros</span></div>
+  </section>
+
+  <section class="box" id="jogos">
+    <h2>🎮 Mini jogos e RPG da máfia</h2>
+    <p>Quiz, ship, rali, adivinhação e um RPG de máfia completo com aventuras, duelos e chefão.</p>
+  </section>
+
+  <section class="box" id="traducao">
+    <h2>🌐 Tradução e wiki</h2>
+    <p>Traduza mensagens com /traduzir, automaticamente num canal ou reagindo com a bandeira do idioma. Inclui a Wiki de Capos.</p>
+  </section>
+
+  <section class="box" id="comandos">
+    <h2>⌨️ Comandos</h2>
+    <p>Alguns dos comandos principais (o resto você configura pelo painel).</p>
+    <div class="cmds">
+      <div><code>/painel</code><small>link do painel de configuração</small></div>
+      <div><code>/rank</code><small>seu nível e XP</small></div>
+      <div><code>/traduzir</code><small>traduz um texto</small></div>
+      <div><code>/ticket</code><small>publica o painel de tickets</small></div>
+      <div><code>/telefone</code><small>gerencia atendimentos (equipe)</small></div>
+      <div><code>/aventura</code><small>RPG da máfia</small></div>
+      <div><code>/quiz · /ship · /rali</code><small>mini jogos</small></div>
+      <div><code>/duelo · /chefe</code><small>RPG avançado (Premium)</small></div>
+      <div><code>/premium</code><small>plano Premium do servidor</small></div>
+    </div>
+  </section>
+
+  <section class="box" id="status">
+    <h2>📡 Status</h2>
+    <p><span class="ok" id="dot"></span><span id="stText">Verificando…</span></p>
+    <div class="stats"><div><b id="stPing">—</b>ping</div><div><b id="stUp">—</b>no ar</div></div>
+  </section>
+
+  <section class="box" id="premium">
+    <h2>✨ Premium</h2>
+    <p>Recursos extras e limites maiores para o seu servidor.</p>
+    <div class="price" id="price">—</div>
+    <ul class="perks" id="perks"></ul>
+    <div class="btns" style="margin-top:18px"><a class="btn main" href="/painel">💎 Assinar pelo painel</a><a class="btn" id="bSupport2" href="#">Falar com o suporte</a></div>
+  </section>
+</main>
+<footer>© BOT QSD · Feito para comunidades de Discord · <a href="/painel">Painel</a></footer>
+
+<script>
+(function () {
+  var $ = function (s) { return document.querySelector(s); };
+  // tema (lembra a escolha, mas funciona sem armazenamento)
+  var root = document.documentElement;
+  function applyTheme(t) { root.setAttribute('data-theme', t); $('#theme').textContent = t === 'light' ? '☀️' : '🌙'; }
+  var saved = 'dark'; try { saved = localStorage.getItem('qsd.theme') || 'dark'; } catch (e) {}
+  applyTheme(saved);
+  $('#theme').onclick = function () {
+    var t = root.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+    applyTheme(t); try { localStorage.setItem('qsd.theme', t); } catch (e) {}
+  };
+  // menu
+  var drawer = $('#drawer');
+  $('#burger').onclick = function () { drawer.classList.toggle('open'); };
+  drawer.addEventListener('click', function (e) { if (e.target.tagName === 'A') drawer.classList.remove('open'); });
+  // dados do bot
+  function fmtUp(s) { var d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60); return d ? d + 'd ' + h + 'h' : h ? h + 'h ' + m + 'min' : m + 'min'; }
+  fetch('/api/public').then(function (r) { if (!r.ok) throw 0; return r.json(); }).then(function (d) {
+    document.title = d.name + ' — bot multifuncional para Discord';
+    $('#bname').textContent = d.name; $('#hname').textContent = d.name;
+    $('#avatar').src = d.avatar; $('#logo').src = d.avatar;
+    $('#sServers').textContent = d.servers.toLocaleString('pt-BR'); $('#sMembers').textContent = d.members.toLocaleString('pt-BR');
+    ['#mInvite', '#bInvite'].forEach(function (s) { $(s).href = d.invite; });
+    ['#mSupport', '#bSupport2'].forEach(function (s) { $(s).href = d.support; });
+    $('#stText').textContent = 'Online e funcionando'; $('#stPing').textContent = d.ping + ' ms'; $('#stUp').textContent = fmtUp(d.uptime);
+    $('#price').innerHTML = ''; $('#price').append('R$ ' + d.price.toFixed(2).replace('.', ','), Object.assign(document.createElement('small'), { textContent: ' / ' + d.days + ' dias' }));
+    var ul = $('#perks'); d.perks.forEach(function (p) { var li = document.createElement('li'); li.textContent = p; ul.appendChild(li); });
+  }).catch(function () {
+    $('#dot').classList.add('bad'); $('#stText').textContent = 'Não foi possível consultar o bot agora.';
+  });
+})();
+</script>
+</body>
+</html>

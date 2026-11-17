@@ -436,6 +436,36 @@ function startWeb(bot) {
     } catch (e) { res.status(400).json({ error: e.message }); }
   });
 
+  // Dados públicos para a página inicial do site (sem login, nada sensível)
+  app.get('/api/public', (req, res) => {
+    const perms = new PermissionsBitField([
+      PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.EmbedLinks,
+      PermissionFlagsBits.AttachFiles, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.AddReactions,
+      PermissionFlagsBits.UseExternalEmojis, PermissionFlagsBits.ManageRoles, PermissionFlagsBits.ManageChannels,
+      PermissionFlagsBits.ManageMessages, PermissionFlagsBits.ModerateMembers, PermissionFlagsBits.KickMembers, PermissionFlagsBits.ViewAuditLog, PermissionFlagsBits.BanMembers, PermissionFlagsBits.ChangeNickname,
+      PermissionFlagsBits.ManageGuildExpressions,
+    ]).bitfield;
+    const q = new URLSearchParams({ client_id: CLIENT_ID, permissions: String(perms), scope: 'bot applications.commands' });
+    res.json({
+      name: client.user.username,
+      avatar: client.user.displayAvatarURL({ size: 256, extension: 'png' }),
+      servers: client.guilds.cache.size,
+      members: client.guilds.cache.reduce((n, g) => n + (g.memberCount || 0), 0),
+      ping: Math.round(client.ws.ping),
+      uptime: Math.round(process.uptime()),
+      invite: 'https://discord.com/oauth2/authorize?' + q,
+      support: process.env.SUPPORT_URL || pix.SUPPORT,
+      price: premium.price(),
+      days: premium.planDays(),
+      perks: premium.perkLines(),
+    });
+  });
+
+  // Página inicial: visitantes veem o site; quem já entrou vai direto ao painel. O painel também fica em /painel.
+  const pubDir = path.join(__dirname, '..', 'public');
+  app.get('/', (req, res) => res.sendFile(path.join(pubDir, req.session.user ? 'index.html' : 'site.html')));
+  app.get('/painel', (req, res) => res.sendFile(path.join(pubDir, 'index.html')));
+
   app.use('/api', (req, res) => res.status(404).json({ error: 'Rota não encontrada.' }));
   app.use(express.static(path.join(__dirname, '..', 'public')));
 
