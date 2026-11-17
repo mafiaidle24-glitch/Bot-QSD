@@ -21,6 +21,9 @@ const premium = require('./premium');
 const identity = require('./identity');
 const diagnostico = require('./diagnostico');
 const telefone = require('./telefone');
+const reactroles = require('./reactroles');
+const stats = require('./stats');
+const alertas = require('./alertas');
 
 const EPHEMERAL = MessageFlags.Ephemeral;
 const BASE_URL = (process.env.BASE_URL || 'http://localhost:3000').replace(/\/$/, '');
@@ -455,6 +458,10 @@ async function handleTranslate(msg, cfg) {
   }
 }
 
+// Cargos por reação de emoji
+client.on(Events.MessageReactionAdd, (reaction, user) => reactroles.handle(reaction, user, true));
+client.on(Events.MessageReactionRemove, (reaction, user) => reactroles.handle(reaction, user, false));
+
 // Tradução por reação de bandeira. Tem logs "[bandeira]" em cada etapa para achar onde falha.
 client.on(Events.MessageReactionAdd, async (reaction, user) => {
   const dbg = (m) => console.log('[bandeira] ' + m);
@@ -884,6 +891,10 @@ client.once(Events.ClientReady, async () => {
   nextStatus();
   setInterval(nextStatus, 45_000).unref?.();
   premium.init(client);
+  setTimeout(() => stats.tick(client).catch((e) => warn('estatísticas', e)), 15_000);
+  setInterval(() => stats.tick(client).catch((e) => warn('estatísticas', e)), 10 * 60_000).unref?.();
+  setTimeout(() => alertas.tick(client).catch((e) => warn('alertas', e)), 45_000);
+  setInterval(() => alertas.tick(client).catch((e) => warn('alertas', e)), 5 * 60_000).unref?.();
   setTimeout(() => diagnostico.logStartup(), 5_000);
   setTimeout(() => identity.sweep(client), 20_000);
   setInterval(() => identity.sweep(client), 10 * 60_000).unref?.();
