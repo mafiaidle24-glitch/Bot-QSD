@@ -28,6 +28,12 @@ const price = () => {
   const n = Number(String(process.env.PREMIUM_PRICE || '').replace(',', '.'));
   return n > 0 ? Math.round(n * 100) / 100 : 14.9;
 };
+// Promoção: PREMIUM_PRICE = preço de agora; PREMIUM_OLD_PRICE = preço normal (riscado); PREMIUM_PROMO_LABEL = texto da faixa.
+const promo = () => {
+  const old = Number(String(process.env.PREMIUM_OLD_PRICE || '').replace(',', '.'));
+  if (!(old > price())) return null;
+  return { oldPrice: Math.round(old * 100) / 100, label: String(process.env.PREMIUM_PROMO_LABEL || '🔥 Promoção').slice(0, 60) };
+};
 const planDays = () => {
   const n = Math.round(Number(process.env.PREMIUM_DAYS));
   return n > 0 && n <= 365 ? n : 30;
@@ -333,7 +339,7 @@ function mainView(gid) {
   const s = info(gid);
   const e = new EmbedBuilder().setColor(s.active ? 0xf1c40f : 0x5865f2).setTitle('💎 Premium')
     .setDescription(statusLine(gid) + '\n\n**Vantagens**\n' + perkLines().join('\n') +
-      '\n\n**Plano:** ' + money(price()) + ' por ' + planDays() + ' dias, pago por Pix. A ativação é automática e os dias são somados se você renovar antes de acabar.');
+      '\n\n**Plano:** ' + (promo() ? '~~' + money(promo().oldPrice) + '~~ **' + money(price()) + '** ' + promo().label : money(price())) + ' por ' + planDays() + ' dias, pago por Pix. A ativação é automática e os dias são somados se você renovar antes de acabar.');
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId('pm:buy').setLabel(s.paid ? 'Renovar por Pix' : 'Assinar por Pix').setEmoji('💎').setStyle(ButtonStyle.Success).setDisabled(!mpOn()),
   );
@@ -411,6 +417,6 @@ async function handleButton(i) {
 
 module.exports = {
   botOwnerId, isBotOwner, commands, handleSlash, handleButton, init, info, isPremium, perks, grant, revoke, setExempt, quota, consume, quotaMsg, LOCK_MSG, lim, statusLine, perkLines,
-  mpOn, price, planDays, money, createPayment, checkPayment, handleWebhook, publicPayment, pollPending,
+  mpOn, price, promo, planDays, money, createPayment, checkPayment, handleWebhook, publicPayment, pollPending,
   PERKS, FREE, store, fmtDate,
 };
