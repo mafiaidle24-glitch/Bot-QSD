@@ -678,12 +678,11 @@ function tabCoaching() {
     try { await save(); await api('/api/guilds/' + st.gid + '/coaching/table/refresh', { method: 'POST' }); toast('Tabela atualizada no Discord!', 'ok'); await reloadData(false); } catch (e) { toast(e.message, 'err'); }
   };
   return h('div', {},
-    card('🕴️ Coaching de gangue (Idle Mafia)', 'O membro posta o print da tela "Formações" no canal de coaching dele. O bot lê os 4 times e o poder com IA, guarda só o último print de cada pessoa e mantém uma tabela atualizada.',
+    card('🕴️ Coaching de gangue (Idle Mafia)', 'Os membros postam o print da tela "Formações" no canal de formações. O bot lê os 4 times e o poder com IA, guarda só o último print de cada pessoa e mantém uma tabela atualizada.',
       st.data.geminiKey ? null : h('div', { class: 'warn' }, '⚠️ A leitura por IA ainda não está ligada: o dono do bot precisa criar a chave grátis em aistudio.google.com e colocar na hospedagem como GEMINI_API_KEY.'),
       chk(c, 'enabled', 'Coaching ligado'),
       h('div', { class: 'row' },
-        field('Categoria dos canais de coaching', sel(c, 'categoryId', catOpts, { empty: '— nenhuma —' }), 'Todos os canais dentro dessa categoria valem.'),
-        field('Ou canais específicos', multi(c, 'channelIds', chOpts(), { label: 'adicionar canal…' }))),
+        field('Canal de formações (onde os membros enviam o print)', multi(c, 'channelIds', chOpts(), { label: 'adicionar canal…' }), 'Só aqui o bot lê imagens. Nos canais de coaching ele não lê nada.')),
       h('div', { class: 'row' },
         field('Cargos que podem corrigir (além de quem gerencia o servidor)', multi(c, 'staffRoleIds', roleOpts(), { label: 'adicionar cargo…' })),
         field('Canal da tabela fixa', sel(c, 'tableChannelId', chOpts(), { empty: '— sem tabela no Discord —' }))),
@@ -691,6 +690,8 @@ function tabCoaching() {
       h('div', { class: 'dbtns', style: 'margin-top:10px' }, h('button', { class: 'btn', onclick: refresh }, '📌 Salvar e atualizar a tabela no Discord'))),
     card('📋 Formações dos membros', 'Toque em um membro para corrigir qualquer erro de leitura da IA.', tbl),
     card('📖 Como funciona', null, h('ul', { class: 'cl' },
+      h('li', {}, 'O bot marca ✅ na mensagem quando leu o print (❌ se não conseguiu). O print fica no canal.'),
+      h('li', {}, 'Se mandarem uma imagem que não é a tela de Formações, o bot avisa e não altera a tabela.'),
       h('li', {}, 'O nome vem de quem postou o print no Discord. Se a equipe postar o print de outra pessoa, é só mencioná-la na mesma mensagem.'),
       h('li', {}, 'O bot responde com o que leu e dois botões: ✏️ Corrigir e 🗑️ Descartar (só a equipe usa).'),
       h('li', {}, 'Um print novo do mesmo membro substitui o anterior, então quase não ocupa espaço.'),

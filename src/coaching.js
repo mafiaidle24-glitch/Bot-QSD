@@ -1,4 +1,4 @@
-// Coaching de gangue (Idle Mafia): o membro posta o print da tela "Formações" no canal de coaching,
+// Coaching de gangue (Idle Mafia): o membro posta o print da tela "Formações" no canal de formações,
 // o bot manda a imagem para o Gemini (Google) ler, guarda só o último print de cada membro e mantém
 // uma tabela atualizada no Discord e no painel. A equipe pode corrigir qualquer erro de leitura.
 const {
@@ -161,7 +161,8 @@ const cooldown = new Map();
 const noKeyWarned = new Set();
 const inScope = (msg, c) => {
   const ch = msg.channel;
-  return c.channelIds.includes(ch.id) || (c.categoryId && (ch.parentId === c.categoryId || ch.parent?.parentId === c.categoryId)) || (ch.parentId && c.channelIds.includes(ch.parentId));
+  // só o(s) canal(is) de formações: os canais de coaching ficam livres para conversa e outros prints
+  return c.channelIds.includes(ch.id) || (ch.parentId && c.channelIds.includes(ch.parentId));
 };
 const isImage = (a) => /^image\//i.test(a.contentType || '') || /\.(png|jpe?g|webp)(\?|$)/i.test(a.url || a.name || '');
 
