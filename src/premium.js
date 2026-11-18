@@ -205,7 +205,7 @@ async function createPayment(gid, userId) {
   if (!mpOn()) throw new Error('A cobrança ainda não foi configurada pelo dono do bot.');
   const now = Date.now();
   for (const [id, p] of Object.entries(store().payments)) {
-    if (p.guildId === gid && p.userId === userId && p.status === 'pending' && now - p.created < (WAIT_MIN - 3) * 60000 && p.code) return { id, ...p };
+    if (p.guildId === gid && p.userId === userId && p.status === 'pending' && Math.abs(p.amount - price()) < 0.001 && now - p.created < (WAIT_MIN - 3) * 60000 && p.code) return { id, ...p };
   }
   const amount = price();
   const key = 'qsd-' + gid + '-' + userId + '-' + now;
