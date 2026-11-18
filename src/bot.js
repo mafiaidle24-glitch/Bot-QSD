@@ -24,6 +24,7 @@ const telefone = require('./telefone');
 const reactroles = require('./reactroles');
 const stats = require('./stats');
 const alertas = require('./alertas');
+const coaching = require('./coaching');
 
 const EPHEMERAL = MessageFlags.Ephemeral;
 const BASE_URL = (process.env.BASE_URL || 'http://localhost:3000').replace(/\/$/, '');
@@ -574,6 +575,7 @@ client.on(Events.MessageCreate, async (msg) => {
     return;
   }
   if (msg.author.bot || msg.webhookId) return;
+  coaching.handleMessage(msg).catch((e) => warn('coaching', e));
   try { if (await telefone.handleStaffMessage(msg)) return; } catch (e) { warn('telefone (equipe)', e); }
   const cfg = cfgs.getConfig(msg.guild.id);
   try { if (await moderation.automod(msg, cfg)) return; } catch (e) { warn('automod', e); }
@@ -864,6 +866,7 @@ client.on(Events.InteractionCreate, async (i) => {
   try {
     if ((i.isButton() || i.isStringSelectMenu()) && i.customId.startsWith('tf:')) return await telefone.handleInteraction(i);
     if (!i.guild) return;
+    if ((i.isButton() || i.isModalSubmit()) && i.customId.startsWith('co:')) return await coaching.handleInteraction(i);
     if (i.isChatInputCommand()) return await runSlash(i);
     if (i.isStringSelectMenu() && i.customId.startsWith('rpg:')) return await rpg.handleSelect(i);
     if (i.isButton()) {

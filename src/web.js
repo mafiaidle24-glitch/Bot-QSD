@@ -17,6 +17,7 @@ const pix = require('./pix');
 const reactroles = require('./reactroles');
 const stats = require('./stats');
 const alertas = require('./alertas');
+const coaching = require('./coaching');
 const { renderCard } = require('./card');
 const { LANGS } = require('./translate');
 
@@ -142,7 +143,7 @@ function startWeb(bot) {
     perks: premium.perkLines(),
     limits: { reactionItems: premium.perks(gid).reactionItems, alerts: premium.perks(gid).alerts, statsChannels: premium.perks(gid).statsChannels, ticketTypes: premium.perks(gid).ticketTypes, words: premium.perks(gid).words, levelCard: premium.perks(gid).levelCard },
     features: ['welcomeCard', 'autoroles', 'moderation', 'logs', 'levelCard', 'ticketTranscript', 'duelBoss', 'identity', 'telefone'].reduce((o, k) => ({ ...o, [k]: !!premium.perks(gid)[k] }), {}),
-    quotas: ['panelPublishes', 'messagePublishes', 'wikiPublishes', 'translationsDay', 'gamesDay'].reduce((o, k) => {
+    quotas: ['panelPublishes', 'messagePublishes', 'wikiPublishes', 'translationsDay', 'gamesDay', 'coachingDay'].reduce((o, k) => {
       const q = premium.quota(gid, k);
       return { ...o, [k]: { limit: q.limit === Infinity ? null : q.limit, used: q.used, per: q.per } };
     }, {}),
@@ -267,6 +268,7 @@ function startWeb(bot) {
       channels,
       categories,
       voice,
+      geminiKey: !!process.env.GEMINI_API_KEY,
       alertKeys: { twitch: !!(process.env.TWITCH_CLIENT_ID && process.env.TWITCH_CLIENT_SECRET), kick: !!(process.env.KICK_CLIENT_ID && process.env.KICK_CLIENT_SECRET) },
       members,
       roles,
@@ -386,6 +388,31 @@ function startWeb(bot) {
     } catch (e) {
       res.status(400).json({ error: e.message });
     }
+  }));
+
+  // Coaching: tabela de formações dos membros (o líder pode corrigir erros de leitura)
+  app.get('/api/guilds/:id/coaching', requireAuth, guildAccess, wrap(async (req, res) => {
+    res.json({ members: coaching.listMembers(req.guild.id), geminiKey: !!process.env.GEMINI_API_KEY });
+  }));
+  app.put('/api/guilds/:id/coaching/members/:uid', requireAuth, guildAccess, wrap(async (req, res) => {
+    const uid = String(req.params.uid);
+    if (!/^\d{5,25}$/.test(uid)) return res.status(400).json({ error: 'Membro inválido.' });
+    const teams = coaching.normTeams(req.body?.teams);
+    if (!teams.length) return res.status(400).json({ error: 'Coloque pelo menos um time com o poder, por exemplo 407.5T.' });
+    const old = coaching.listMembers(req.guild.id).find((m) => m.id === uid);
+    const name = String(req.body?.name || old?.name || uid).slice(0, 40);
+    coaching.saveMember(req.guild.id, uid, name, teams, { edited: !!old });
+    coaching.refreshTable(bot.client, req.guild.id);
+    res.json({ ok: true, members: coaching.listMembers(req.guild.id) });
+  }));
+  app.delete('/api/guilds/:id/coaching/members/:uid', requireAuth, guildAccess, wrap(async (req, res) => {
+    coaching.deleteMember(req.guild.id, String(req.params.uid));
+    coaching.refreshTable(bot.client, req.guild.id);
+    res.json({ ok: true, members: coaching.listMembers(req.guild.id) });
+  }));
+  app.post('/api/guilds/:id/coaching/table/refresh', requireAuth, guildAccess, wrap(async (req, res) => {
+    await coaching.refreshTable(bot.client, req.guild.id);
+    res.json({ ok: true, config: cfgs.getConfig(req.guild.id).coaching });
   }));
 
   app.post('/api/guilds/:id/test/:kind', requireAuth, guildAccess, wrap(async (req, res) => {

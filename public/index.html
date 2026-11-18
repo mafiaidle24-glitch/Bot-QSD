@@ -273,7 +273,7 @@ function msgPreview(text, imgEl) {
 
 /* ---------- abas ---------- */
 const TABS = [
-  ['home', '🏠 Início'], ['welcome', '👋 Boas-vindas'], ['leave', '🚪 Saída'], ['kick', '👢 Expulsão'], ['roles', '🎛️ Cargos / Botões'], ['reactroles', '🙋 Cargos por reação'], ['alerts', '🔔 Alertas'], ['stats', '📊 Estatísticas'], ['messages', '📨 Mensagens / Embeds'], ['wiki', '📖 Wiki de Capos'], ['tickets', '🎫 Tickets'], ['telefone', '📞 Telefone Vermelho'], ['autoroles', '🏷️ Autoroles'], ['moderation', '🔨 Moderação'], ['logs', '📜 Logs'],
+  ['home', '🏠 Início'], ['welcome', '👋 Boas-vindas'], ['leave', '🚪 Saída'], ['kick', '👢 Expulsão'], ['roles', '🎛️ Cargos / Botões'], ['reactroles', '🙋 Cargos por reação'], ['alerts', '🔔 Alertas'], ['stats', '📊 Estatísticas'], ['messages', '📨 Mensagens / Embeds'], ['wiki', '📖 Wiki de Capos'], ['tickets', '🎫 Tickets'], ['coaching', '🕴️ Coaching'], ['telefone', '📞 Telefone Vermelho'], ['autoroles', '🏷️ Autoroles'], ['moderation', '🔨 Moderação'], ['logs', '📜 Logs'],
   ['levels', '⭐ Rank / Níveis'], ['commands', '⌨️ Comandos'], ['interaction', '💬 Interação'],
   ['translate', '🌐 Tradução'], ['games', '🎮 Mini jogos'], ['identity', '🎭 Identidade'], ['expressions', '😀 Emojis / Figurinhas'], ['premium', '💎 Premium'],
 ];
@@ -638,6 +638,65 @@ function tabLogs() {
     card('O que registrar', '', EV.map(([k, t]) => chk(l.events, k, t))));
 }
 
+function tabCoaching() {
+  const c = st.cfg.coaching;
+  const catOpts = (st.data.categories || []).map((x) => ({ v: x.id, t: '📁 ' + x.name }));
+  const tbl = h('div', {}, h('p', { class: 'muted' }, 'Carregando…'));
+  let members = [];
+  const teamsText = (m) => m.teams.map((t) => t.name + ' | ' + t.power + ' | ' + t.capos.join(', ')).join('\n');
+  const parse = (txt) => txt.split('\n').map((l) => l.trim()).filter(Boolean).map((l, i) => {
+    const p = l.split('|').map((x) => x.trim());
+    if (p.length >= 3) return { name: p[0], power: p[1], capos: p.slice(2).join(',').split(',').map((x) => x.trim()).filter(Boolean) };
+    if (p.length === 2) return { name: p[0], power: p[1], capos: [] };
+    return { name: 'Time ' + (i + 1), power: p[0], capos: [] };
+  });
+  const draw = () => {
+    if (!members.length) { tbl.replaceChildren(h('p', { class: 'muted' }, 'Ninguém enviou o print das Formações ainda.')); return; }
+    tbl.replaceChildren(members.map((m, i) => {
+      const ta = h('textarea', { rows: Math.max(3, m.teams.length + 1), style: 'width:100%;font-family:monospace;font-size:12px' });
+      ta.value = teamsText(m);
+      const body = h('div', { style: 'display:none;margin-top:8px' },
+        h('div', { class: 'muted', style: 'font-size:12px;margin-bottom:4px' }, 'Uma linha por time: Nome | poder | capos (separados por vírgula). Apagar a linha remove o time.'),
+        ta,
+        h('div', { class: 'dbtns', style: 'margin-top:8px' },
+          h('button', { class: 'btn green small', onclick: async () => {
+            try { const r = await api('/api/guilds/' + st.gid + '/coaching/members/' + m.id, { method: 'PUT', body: { name: m.name, teams: parse(ta.value) } }); members = r.members; toast('Corrigido!', 'ok'); draw(); } catch (e) { toast(e.message, 'err'); }
+          } }, '💾 Salvar correção'),
+          h('button', { class: 'btn danger small', onclick: async () => {
+            if (!confirm('Descartar os dados de ' + m.name + '?')) return;
+            try { const r = await api('/api/guilds/' + st.gid + '/coaching/members/' + m.id, { method: 'DELETE' }); members = r.members; draw(); } catch (e) { toast(e.message, 'err'); }
+          } }, 'Descartar')));
+      return h('div', { class: 'item' },
+        h('div', { style: 'display:flex;justify-content:space-between;gap:8px;align-items:center;cursor:pointer', onclick: () => { body.style.display = body.style.display === 'none' ? 'block' : 'none'; } },
+          h('div', {}, h('b', {}, (i + 1) + '. ' + m.name), h('div', { class: 'muted', style: 'font-size:12px' }, m.teams.map((t) => t.power || '?').join(' / ') + (m.editedAt ? ' · ✏️ corrigido' : ''))),
+          h('div', { style: 'font-weight:700' }, m.totalText)),
+        body);
+    }));
+  };
+  api('/api/guilds/' + st.gid + '/coaching').then((r) => { members = r.members; draw(); }).catch((e) => tbl.replaceChildren(h('p', { class: 'muted' }, e.message)));
+  const refresh = async () => {
+    try { await save(); await api('/api/guilds/' + st.gid + '/coaching/table/refresh', { method: 'POST' }); toast('Tabela atualizada no Discord!', 'ok'); await reloadData(false); } catch (e) { toast(e.message, 'err'); }
+  };
+  return h('div', {},
+    card('🕴️ Coaching de gangue (Idle Mafia)', 'O membro posta o print da tela "Formações" no canal de coaching dele. O bot lê os 4 times e o poder com IA, guarda só o último print de cada pessoa e mantém uma tabela atualizada.',
+      st.data.geminiKey ? null : h('div', { class: 'warn' }, '⚠️ A leitura por IA ainda não está ligada: o dono do bot precisa criar a chave grátis em aistudio.google.com e colocar na hospedagem como GEMINI_API_KEY.'),
+      chk(c, 'enabled', 'Coaching ligado'),
+      h('div', { class: 'row' },
+        field('Categoria dos canais de coaching', sel(c, 'categoryId', catOpts, { empty: '— nenhuma —' }), 'Todos os canais dentro dessa categoria valem.'),
+        field('Ou canais específicos', multi(c, 'channelIds', chOpts(), { label: 'adicionar canal…' }))),
+      h('div', { class: 'row' },
+        field('Cargos que podem corrigir (além de quem gerencia o servidor)', multi(c, 'staffRoleIds', roleOpts(), { label: 'adicionar cargo…' })),
+        field('Canal da tabela fixa', sel(c, 'tableChannelId', chOpts(), { empty: '— sem tabela no Discord —' }))),
+      field('Cor das mensagens', cInput(c, 'color')),
+      h('div', { class: 'dbtns', style: 'margin-top:10px' }, h('button', { class: 'btn', onclick: refresh }, '📌 Salvar e atualizar a tabela no Discord'))),
+    card('📋 Formações dos membros', 'Toque em um membro para corrigir qualquer erro de leitura da IA.', tbl),
+    card('📖 Como funciona', null, h('ul', { class: 'cl' },
+      h('li', {}, 'O nome vem de quem postou o print no Discord. Se a equipe postar o print de outra pessoa, é só mencioná-la na mesma mensagem.'),
+      h('li', {}, 'O bot responde com o que leu e dois botões: ✏️ Corrigir e 🗑️ Descartar (só a equipe usa).'),
+      h('li', {}, 'Um print novo do mesmo membro substitui o anterior, então quase não ocupa espaço.'),
+      h('li', {}, 'Plano grátis: poucos prints lidos por dia. No 💎 Premium o limite é bem maior.'))));
+}
+
 function tabTelefone() {
   const t = st.cfg.telefone;
   const catOpts = (st.data.categories || []).map((c) => ({ v: c.id, t: '📁 ' + c.name }));
@@ -769,6 +828,7 @@ function tabNotice(tab) {
     leave: '💎 No plano grátis o bot envia só a mensagem de texto. O cartão com imagem é Premium.',
     kick: '💎 No plano grátis o bot envia só a mensagem de texto. O cartão com imagem é Premium.',
     roles: '💎 Plano grátis: até ' + (pm.maxPanelButtons) + ' botões por painel e ' + (q.panelPublishes ? q.panelPublishes.limit : '') + ' publicações por mês (' + use('panelPublishes') + ').',
+    coaching: '💎 Plano grátis: ' + (q.coachingDay ? q.coachingDay.limit : '') + ' prints lidos por dia (' + use('coachingDay') + ').',
     reactroles: '💎 Plano grátis: até ' + (pm.limits.reactionItems) + ' emojis por painel e ' + (q.panelPublishes ? q.panelPublishes.limit : '') + ' publicações por mês (' + use('panelPublishes') + ').',
     alerts: '💎 Plano grátis: até ' + (pm.limits.alerts) + ' alertas.',
     stats: '💎 Plano grátis: até ' + (pm.limits.statsChannels) + ' canais de estatísticas.',
@@ -1572,7 +1632,7 @@ function tabExpressions() {
     log, gallery);
 }
 
-const TAB_FN = { home: tabHome, messages: tabMessages, wiki: tabWiki, tickets: tabTickets, telefone: tabTelefone, autoroles: tabAutoroles, moderation: tabModeration, logs: tabLogs, welcome: () => tabCard('welcome'), leave: () => tabCard('leave'), kick: () => tabCard('kick'), roles: tabRoles, reactroles: tabReactRoles, alerts: tabAlerts, stats: tabStats, levels: tabLevels, commands: tabCommands, interaction: tabInteraction, translate: tabTranslate, games: tabGames, identity: tabIdentity, expressions: tabExpressions, premium: tabPremium };
+const TAB_FN = { home: tabHome, messages: tabMessages, wiki: tabWiki, tickets: tabTickets, telefone: tabTelefone, coaching: tabCoaching, autoroles: tabAutoroles, moderation: tabModeration, logs: tabLogs, welcome: () => tabCard('welcome'), leave: () => tabCard('leave'), kick: () => tabCard('kick'), roles: tabRoles, reactroles: tabReactRoles, alerts: tabAlerts, stats: tabStats, levels: tabLevels, commands: tabCommands, interaction: tabInteraction, translate: tabTranslate, games: tabGames, identity: tabIdentity, expressions: tabExpressions, premium: tabPremium };
 
 /* ---------- salvar / carregar ---------- */
 async function save() {

@@ -88,6 +88,7 @@ function defaults() {
     reactionRoles: [],
     stats: { enabled: false, categoryId: '', items: [] },
     alerts: { enabled: false, items: [] },
+    coaching: { enabled: false, categoryId: '', channelIds: [], staffRoleIds: [], tableChannelId: '', tableMessageId: '', color: '#e67e22' },
     identity: { nick: '', avatar: '', banner: '', bio: '' },
     moderation: {
       staffRoleIds: [],
@@ -383,6 +384,22 @@ function sanitizeAlerts(x, old) {
   };
 }
 
+// Coaching de gangue (leitura de prints de formações)
+function sanitizeCoaching(x, old) {
+  x = x && typeof x === 'object' ? x : {};
+  const o = old?.coaching || {};
+  const tableChannelId = sid(x.tableChannelId);
+  return {
+    enabled: bool(x.enabled, false),
+    categoryId: sid(x.categoryId),
+    channelIds: idList(x.channelIds, 50),
+    staffRoleIds: idList(x.staffRoleIds, 10),
+    tableChannelId,
+    tableMessageId: tableChannelId && tableChannelId === o.tableChannelId ? o.tableMessageId || '' : '',
+    color: col(x.color, '#e67e22'),
+  };
+}
+
 // Identidade do bot neste servidor (só imagens enviadas pelo painel).
 function sanitizeIdentity(x) {
   x = x && typeof x === 'object' ? x : {};
@@ -587,6 +604,7 @@ function sanitize(input, old) {
   out.reactionRoles = sanitizeReactionRoles(i.reactionRoles, old);
   out.stats = sanitizeStats(i.stats, old);
   out.alerts = sanitizeAlerts(i.alerts, old);
+  out.coaching = sanitizeCoaching(i.coaching, old);
   out.identity = sanitizeIdentity(i.identity);
   out.moderation = sanitizeModeration(i.moderation);
 
@@ -790,6 +808,12 @@ function setReactionMessage(guildId, id, messageId) {
   db.data.guilds[guildId] = getConfig(guildId);
   db.save();
 }
+function setCoachingTable(guildId, messageId) {
+  const c = getConfig(guildId);
+  c.coaching.tableMessageId = messageId;
+  db.data.guilds[guildId] = c;
+  db.save();
+}
 function setStatsChannel(guildId, id, channelId) {
   const m = getConfig(guildId).stats.items.find((x) => x.id === id);
   if (!m) return;
@@ -798,4 +822,4 @@ function setStatsChannel(guildId, id, channelId) {
   db.save();
 }
 
-module.exports = { setReactionMessage, setStatsChannel, ALERT_DEFAULT, defaults, getConfig, setConfig, validate, setPanelMessage, setMessageRef, setWikiListIds, setTicketPanelMessage, nextTicketNumber, nextTelefoneNumber, setTelefoneBlocked, newId };
+module.exports = { setCoachingTable, setReactionMessage, setStatsChannel, ALERT_DEFAULT, defaults, getConfig, setConfig, validate, setPanelMessage, setMessageRef, setWikiListIds, setTicketPanelMessage, nextTicketNumber, nextTelefoneNumber, setTelefoneBlocked, newId };
