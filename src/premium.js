@@ -209,26 +209,58 @@ async function createPayment(gid, userId) {
   }
   const amount = price();
   const key = 'qsd-' + gid + '-' + userId + '-' + now;
-  const body = {
-    transaction_amount: amount,
-    description: 'Premium ' + planDays() + ' dias - servidor ' + gid,
-    payment_method_id: 'pix',
-    external_reference: gid,
-    date_of_expiration: new Date(now + WAIT_MIN * 60000).toISOString().replace('Z', '+00:00'),
-    payer: { email: process.env.MP_PAYER_EMAIL || 'cliente@qsd-bot.com' },
-  };
-  const base = (process.env.BASE_URL || '').replace(/\/$/, '');
-  if (base.startsWith('https://')) body.notification_url = base + '/mp/webhook';
-  const j = await mp('/v1/payments', { method: 'POST', headers: { 'X-Idempotency-Key': key }, body: JSON.stringify(body) });
-  const td = j.point_of_interaction?.transaction_data || {};
+  const email = process.env.MP_PAYER_EMAIL || 'cliente@qsd-bot.com';
+  const desc = 'Premium ' + planDays() + ' dias - servidor ' + gid;
+  let id, td;
+  // 1) API de Orders (a nova, que o Mercado Pago quer que todos usem)
+  if (process.env.MP_USE_PAYMENTS !== '1') {
+    try {
+      const amt = amount.toFixed(2);
+      const j = await mp('/v1/orders', {
+        method: 'POST',
+        headers: { 'X-Idempotency-Key': key },
+        body: JSON.stringify({
+          type: 'online',
+          processing_mode: 'automatic',
+          total_amount: amt,
+          external_reference: gid,
+          description: desc,
+          transactions: { payments: [{ amount: amt, payment_method: { id: 'pix', type: 'bank_transfer' }, expiration_time: 'PT' + WAIT_MIN + 'M' }] },
+          payer: { email },
+        }),
+      });
+      const pm = j.transactions?.payments?.[0]?.payment_method || {};
+      if (!pm.qr_code) throw new Error('resposta sem código Pix');
+      id = String(j.id);
+      td = { qr_code: pm.qr_code, qr_code_base64: pm.qr_code_base64 };
+    } catch (e) {
+      console.error('[premium] API de Orders falhou, usando a de Pagamentos:', e.message);
+    }
+  }
+  // 2) API de Pagamentos (reserva, enquanto o Mercado Pago ainda aceitar)
+  if (!id) {
+    const body = {
+      transaction_amount: amount,
+      description: desc,
+      payment_method_id: 'pix',
+      external_reference: gid,
+      date_of_expiration: new Date(now + WAIT_MIN * 60000).toISOString().replace('Z', '+00:00'),
+      payer: { email },
+    };
+    const base = (process.env.BASE_URL || '').replace(/\/$/, '');
+    if (base.startsWith('https://')) body.notification_url = base + '/mp/webhook';
+    const j = await mp('/v1/payments', { method: 'POST', headers: { 'X-Idempotency-Key': key }, body: JSON.stringify(body) });
+    td = j.point_of_interaction?.transaction_data || {};
+    id = String(j.id);
+  }
   if (!td.qr_code) throw new Error('O Mercado Pago não devolveu o código Pix. Confira se o Pix está ativado na conta.');
   const rec = {
     guildId: gid, userId, amount, days: planDays(), status: 'pending', created: now, applied: false,
     code: td.qr_code, qr: td.qr_code_base64 || '',
   };
-  store().payments[String(j.id)] = rec;
+  store().payments[id] = rec;
   db.save();
-  return { id: String(j.id), ...rec };
+  return { id, ...rec };
 }
 
 /** Consulta o pagamento no MP e, se aprovado, ativa o Premium (uma única vez). */
@@ -236,16 +268,31 @@ async function checkPayment(id) {
   const rec = store().payments[String(id)];
   if (!rec) return null;
   if (rec.applied || rec.status === 'cancelled') return { id: String(id), ...rec };
-  const j = await mp('/v1/payments/' + encodeURIComponent(id));
-  if (Number(j.transaction_amount) < rec.amount - 0.001 || String(j.external_reference || '') !== rec.guildId) return { id: String(id), ...rec };
-  if (j.status === 'approved') {
+  let paid, dead, amountOk, refOk;
+  if (String(id).startsWith('ORD')) { // API de Orders
+    const j = await mp('/v1/orders/' + encodeURIComponent(id));
+    const pays = j.transactions?.payments || [];
+    const st = [j.status, ...pays.map((x) => x.status)].map((x) => String(x || '').toLowerCase());
+    paid = st.some((x) => ['processed', 'approved', 'accredited'].includes(x));
+    dead = !paid && st.some((x) => ['canceled', 'cancelled', 'expired', 'failed', 'refunded', 'rejected'].includes(x));
+    amountOk = Number(j.total_amount ?? pays[0]?.amount) >= rec.amount - 0.001;
+    refOk = String(j.external_reference || '') === rec.guildId;
+  } else { // API de Pagamentos
+    const j = await mp('/v1/payments/' + encodeURIComponent(id));
+    paid = j.status === 'approved';
+    dead = ['cancelled', 'rejected', 'refunded', 'charged_back'].includes(j.status);
+    amountOk = Number(j.transaction_amount) >= rec.amount - 0.001;
+    refOk = String(j.external_reference || '') === rec.guildId;
+  }
+  if (!amountOk || !refOk) return { id: String(id), ...rec };
+  if (paid) {
     rec.status = 'approved';
     rec.applied = true;
     rec.qr = '';
     const until = grant(rec.guildId, rec.days, 'pix:' + id);
     db.save();
     notifyPaid(rec, until);
-  } else if (['cancelled', 'rejected', 'refunded', 'charged_back'].includes(j.status)) {
+  } else if (dead) {
     rec.status = 'cancelled';
     rec.qr = '';
     db.save();
