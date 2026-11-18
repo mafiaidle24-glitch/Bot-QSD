@@ -71,6 +71,7 @@ const PERKS = {
   reactions: 100,      // reações automáticas
   translationsDay: Infinity,  // traduções por dia
   gamesDay: Infinity,  // usos de comandos de mini jogo por dia
+  coachingDay: 100,    // prints lidos pela IA por dia (coaching)
 };
 const FREE = {
   chatXp: 1, rpgCash: 1, rpgXp: 1, bossTries: 3, ticketTypes: 3, words: 30, levelCard: false,
@@ -78,7 +79,7 @@ const FREE = {
   identity: false, telefone: false,
   reactionItems: 3, statsChannels: 2, alerts: 2,
   panelButtons: 3, panelPublishes: 2, messagePublishes: 2, wikiPublishes: 1,
-  customCommands: 5, triggers: 5, reactions: 5, translationsDay: 20, gamesDay: 30,
+  customCommands: 5, triggers: 5, reactions: 5, translationsDay: 20, gamesDay: 30, coachingDay: 5,
 };
 const lim = (n) => (n === Infinity ? 'ilimitado' : String(n));
 
@@ -132,7 +133,7 @@ function setExempt(gid, on) {
 }
 
 /* ---- cotas de uso (por mês ou por dia, fuso de São Paulo) ---- */
-const PERIOD = { panelPublishes: 'month', messagePublishes: 'month', wikiPublishes: 'month', translationsDay: 'day', gamesDay: 'day' };
+const PERIOD = { panelPublishes: 'month', messagePublishes: 'month', wikiPublishes: 'month', translationsDay: 'day', gamesDay: 'day', coachingDay: 'day' };
 function periodKey(kind) {
   const d = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }); // AAAA-MM-DD
   return kind === 'month' ? d.slice(0, 7) : d;
@@ -156,7 +157,7 @@ function consume(gid, key) {
   if (q.limit !== Infinity) { usageRec(gid, key).n++; db.save(); }
   return true;
 }
-const QUOTA_NAME = { panelPublishes: 'publicações de painéis de cargos', messagePublishes: 'publicações de mensagens', wikiPublishes: 'publicações da lista da wiki', translationsDay: 'traduções', gamesDay: 'usos de mini jogos' };
+const QUOTA_NAME = { panelPublishes: 'publicações de painéis de cargos', messagePublishes: 'publicações de mensagens', wikiPublishes: 'publicações da lista da wiki', translationsDay: 'traduções', gamesDay: 'usos de mini jogos', coachingDay: 'prints lidos no coaching' };
 /** Texto de aviso quando a cota acabou. */
 function quotaMsg(gid, key) {
   const q = quota(gid, key);
@@ -186,6 +187,7 @@ function perkLines() {
     '⭐ +' + Math.round((PERKS.chatXp - 1) * 100) + '% de XP e cartão de rank no aviso de nível',
     '⌨️ Comandos personalizados e 💬 interação: até ' + PERKS.customCommands + ' de cada (grátis: ' + FREE.customCommands + ')',
     '🌐 Traduções ilimitadas (grátis: ' + FREE.translationsDay + ' por dia)',
+    '🕴️ Coaching de gangue: leitura de prints pela IA, até ' + PERKS.coachingDay + ' por dia (grátis: ' + FREE.coachingDay + ')',
     '🎮 Mini jogos ilimitados (grátis: ' + FREE.gamesDay + ' usos por dia)',
     '🎭 Identidade do bot no seu servidor: nome, foto, banner e bio',
     '🕴️ RPG: +' + Math.round((PERKS.rpgCash - 1) * 100) + '% de dinheiro e XP, ' + PERKS.bossTries + ' ataques/dia no chefão, /duelo e /chefe (grátis: sem duelo e chefão)',
