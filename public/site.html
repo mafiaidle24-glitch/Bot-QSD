@@ -204,7 +204,9 @@ footer{text-align:center;color:var(--muted);font-size:13px;padding:26px 16px 50p
     ['#mInvite', '#bInvite'].forEach(function (s) { $(s).href = d.invite; });
     ['#mSupport', '#bSupport2'].forEach(function (s) { $(s).href = d.support; });
     $('#stText').textContent = 'Online e funcionando'; $('#stPing').textContent = d.ping + ' ms'; $('#stUp').textContent = fmtUp(d.uptime);
-    $('#price').innerHTML = ''; $('#price').append('R$ ' + d.price.toFixed(2).replace('.', ','), Object.assign(document.createElement('small'), { textContent: ' / ' + d.days + ' dias' }));
+    $('#price').innerHTML = '';
+    if (d.promo) { var o = document.createElement('s'); o.style.cssText = 'font-size:20px;color:var(--muted);margin-right:8px'; o.textContent = 'R$ ' + d.promo.oldPrice.toFixed(2).replace('.', ','); $('#price').append(o); var b = document.createElement('div'); b.style.cssText = 'font-size:15px;font-weight:700;color:#f1c40f;margin-bottom:4px'; b.textContent = d.promo.label; $('#price').before(b); }
+    $('#price').append('R$ ' + d.price.toFixed(2).replace('.', ','), Object.assign(document.createElement('small'), { textContent: ' / ' + d.days + ' dias' }));
     var ul = $('#perks'); d.perks.forEach(function (p) { var li = document.createElement('li'); li.textContent = p; ul.appendChild(li); });
   }).catch(function () {
     $('#dot').classList.add('bad'); $('#stText').textContent = 'Não foi possível consultar o bot agora.';

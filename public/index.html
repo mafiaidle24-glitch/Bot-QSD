@@ -1002,6 +1002,7 @@ function tabPremium() {
   box.append(
     card('Plano Premium', status,
       h('ul', { class: 'cl' }, pm.perks.map((x) => h('li', {}, x))),
+      pm.promo ? h('div', { class: 'warn', style: 'background:#3b2a12;border-color:#f1c40f' }, pm.promo.label + ' — de ', h('s', {}, 'R$ ' + pm.promo.oldPrice.toFixed(2).replace('.', ',')), ' por apenas ', h('b', {}, 'R$ ' + pm.price.toFixed(2).replace('.', ',')), '!') : null,
       h('p', {}, h('b', {}, 'R$ ' + pm.price.toFixed(2).replace('.', ',')), ' por ' + pm.days + ' dias, pago por Pix. Se renovar antes de acabar, os dias são somados.'),
       pm.mp ? h('button', { class: 'btn green', onclick: pay }, pm.paid ? '💎 Renovar por Pix' : '💎 Assinar por Pix')
         : pm.pix ? manualPix(pm.pix)

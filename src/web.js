@@ -137,6 +137,7 @@ function startWeb(bot) {
     mp: premium.mpOn(),
     pix: premium.mpOn() ? null : { code: pix.payload(), amount: pix.AMOUNT, support: process.env.SUPPORT_URL || pix.SUPPORT }, // Pix manual (sem Mercado Pago)
     price: premium.price(),
+    promo: premium.promo(),
     days: premium.planDays(),
     perks: premium.perkLines(),
     limits: { reactionItems: premium.perks(gid).reactionItems, alerts: premium.perks(gid).alerts, statsChannels: premium.perks(gid).statsChannels, ticketTypes: premium.perks(gid).ticketTypes, words: premium.perks(gid).words, levelCard: premium.perks(gid).levelCard },
@@ -456,6 +457,7 @@ function startWeb(bot) {
       invite: 'https://discord.com/oauth2/authorize?' + q,
       support: process.env.SUPPORT_URL || pix.SUPPORT,
       price: premium.price(),
+      promo: premium.promo(),
       days: premium.planDays(),
       perks: premium.perkLines(),
     });
