@@ -18,6 +18,7 @@ const reactroles = require('./reactroles');
 const stats = require('./stats');
 const alertas = require('./alertas');
 const coaching = require('./coaching');
+const guerra = require('./guerra');
 const { renderCard } = require('./card');
 const { LANGS } = require('./translate');
 
@@ -409,6 +410,43 @@ function startWeb(bot) {
     coaching.deleteMember(req.guild.id, String(req.params.uid));
     coaching.refreshTable(bot.client, req.guild.id);
     res.json({ ok: true, members: coaching.listMembers(req.guild.id) });
+  }));
+  // ----- Guerra de gangues -----
+  app.get('/api/guilds/:id/guerra', requireAuth, guildAccess, wrap(async (req, res) => {
+    res.json(guerra.state(req.guild.id));
+  }));
+  app.put('/api/guilds/:id/guerra/members/:uid', requireAuth, guildAccess, wrap(async (req, res) => {
+    const uid = String(req.params.uid);
+    if (!/^\d{5,25}$/.test(uid)) return res.status(400).json({ error: 'Membro inválido.' });
+    const old = guerra.state(req.guild.id).members.find((m) => m.id === uid);
+    const name = String(req.body?.name || old?.name || '').slice(0, 40);
+    guerra.setDef(req.guild.id, uid, name, req.body?.def, { edited: true });
+    guerra.schedule(bot.client, req.guild.id);
+    res.json(guerra.state(req.guild.id));
+  }));
+  app.delete('/api/guilds/:id/guerra/members/:uid', requireAuth, guildAccess, wrap(async (req, res) => {
+    guerra.deleteMember(req.guild.id, String(req.params.uid));
+    guerra.schedule(bot.client, req.guild.id);
+    res.json(guerra.state(req.guild.id));
+  }));
+  app.put('/api/guilds/:id/guerra/buildings/:n', requireAuth, guildAccess, wrap(async (req, res) => {
+    try { guerra.setBuilding(req.guild.id, req.params.n, req.body?.remaining, '', req.body?.byName || 'Líder', { edited: true }); } catch (e) { return res.status(400).json({ error: e.message }); }
+    guerra.schedule(bot.client, req.guild.id);
+    res.json(guerra.state(req.guild.id));
+  }));
+  app.put('/api/guilds/:id/guerra/check', requireAuth, guildAccess, wrap(async (req, res) => {
+    guerra.setGameTeams(req.guild.id, req.body?.gameTeams);
+    guerra.schedule(bot.client, req.guild.id);
+    res.json(guerra.state(req.guild.id));
+  }));
+  app.post('/api/guilds/:id/guerra/publish', requireAuth, guildAccess, wrap(async (req, res) => {
+    await guerra.refresh(bot.client, req.guild.id, { create: true });
+    res.json({ ok: true, config: cfgs.getConfig(req.guild.id).guerra, state: guerra.state(req.guild.id) });
+  }));
+  app.post('/api/guilds/:id/guerra/reset', requireAuth, guildAccess, wrap(async (req, res) => {
+    guerra.reset(req.guild.id);
+    await guerra.refresh(bot.client, req.guild.id);
+    res.json(guerra.state(req.guild.id));
   }));
   app.post('/api/guilds/:id/coaching/table/refresh', requireAuth, guildAccess, wrap(async (req, res) => {
     await coaching.refreshTable(bot.client, req.guild.id);

@@ -273,7 +273,7 @@ function msgPreview(text, imgEl) {
 
 /* ---------- abas ---------- */
 const TABS = [
-  ['home', '🏠 Início'], ['welcome', '👋 Boas-vindas'], ['leave', '🚪 Saída'], ['kick', '👢 Expulsão'], ['roles', '🎛️ Cargos / Botões'], ['reactroles', '🙋 Cargos por reação'], ['alerts', '🔔 Alertas'], ['stats', '📊 Estatísticas'], ['messages', '📨 Mensagens / Embeds'], ['wiki', '📖 Wiki de Capos'], ['tickets', '🎫 Tickets'], ['coaching', '🕴️ Coaching'], ['telefone', '📞 Telefone Vermelho'], ['autoroles', '🏷️ Autoroles'], ['moderation', '🔨 Moderação'], ['logs', '📜 Logs'],
+  ['home', '🏠 Início'], ['welcome', '👋 Boas-vindas'], ['leave', '🚪 Saída'], ['kick', '👢 Expulsão'], ['roles', '🎛️ Cargos / Botões'], ['reactroles', '🙋 Cargos por reação'], ['alerts', '🔔 Alertas'], ['stats', '📊 Estatísticas'], ['messages', '📨 Mensagens / Embeds'], ['wiki', '📖 Wiki de Capos'], ['tickets', '🎫 Tickets'], ['coaching', '🕴️ Coaching'], ['guerra', '⚔️ Guerra'], ['telefone', '📞 Telefone Vermelho'], ['autoroles', '🏷️ Autoroles'], ['moderation', '🔨 Moderação'], ['logs', '📜 Logs'],
   ['levels', '⭐ Rank / Níveis'], ['commands', '⌨️ Comandos'], ['interaction', '💬 Interação'],
   ['translate', '🌐 Tradução'], ['games', '🎮 Mini jogos'], ['identity', '🎭 Identidade'], ['expressions', '😀 Emojis / Figurinhas'], ['premium', '💎 Premium'],
 ];
@@ -700,6 +700,65 @@ function tabCoaching() {
       h('li', {}, 'O bot responde com o que leu e dois botões: ✏️ Corrigir e 🗑️ Descartar (só a equipe usa).'),
       h('li', {}, 'Um print novo do mesmo membro substitui o anterior, então quase não ocupa espaço.'),
       h('li', {}, 'Plano grátis: poucos prints lidos por dia. No 💎 Premium o limite é bem maior.'))));
+}
+
+function tabGuerra() {
+  const g = st.cfg.guerra;
+  const A = '/api/guilds/' + st.gid + '/guerra';
+  const live = h('div', {}, h('p', { class: 'muted' }, 'Carregando…'));
+  let S = null;
+  const fmt = (b) => b.remaining === null ? 'sem informação' : b.remaining === 0 ? 'pego ✅' : 'faltam ' + b.remaining;
+  const put = async (url, body, method = 'PUT') => { try { S = await api(A + url, { method, body }); draw(); return true; } catch (e) { toast(e.message, 'err'); return false; } };
+  const draw = () => {
+    if (!S) return;
+    const chk2 = h('input', { type: 'number', min: 0, max: 1000, value: S.gameTeams ?? '', placeholder: 'ex.: 40', style: 'width:110px' });
+    const diff = S.diff === null ? '' : (S.diff === 0 ? ' ✅ bate com o placar do jogo' : ' ⚠️ diferença de ' + (S.diff > 0 ? '+' : '') + S.diff + ' time(s)');
+    live.replaceChildren(
+      h('div', { class: 'item' },
+        h('b', {}, 'Defesa: ' + S.teams + ' time(s) · ' + S.points + ' pontos · ' + S.full + ' membro(s) com 4/4'),
+        h('div', { class: 'muted', style: 'font-size:12px;margin:4px 0' }, 'Cada time posicionado vale 25 pontos. Digite o total de times que o jogo mostra para conferir.' + diff),
+        h('div', { class: 'dbtns' }, h('span', {}, 'Times no placar do jogo: '), chk2,
+          h('button', { class: 'btn small', onclick: () => put('/check', { gameTeams: chk2.value === '' ? null : Number(chk2.value) }) }, 'Conferir'))),
+      h('h4', { style: 'margin:14px 0 6px' }, '🏢 Prédios'),
+      S.buildings.map((b) => {
+        const inp = h('input', { type: 'number', min: 0, max: 250, value: b.remaining ?? '', placeholder: 'faltam', style: 'width:90px' });
+        return h('div', { class: 'item', style: 'display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap' },
+          h('div', {}, h('b', {}, b.label), h('div', { class: 'muted', style: 'font-size:12px' }, fmt(b) + (b.byName && b.remaining === 0 ? ' · ' + b.byName : ''))),
+          h('div', { class: 'dbtns' }, inp,
+            h('button', { class: 'btn green small', onclick: () => put('/buildings/' + b.n, { remaining: inp.value === '' ? null : Number(inp.value), byName: 'Líder' }) }, 'Salvar')));
+      }),
+      h('h4', { style: 'margin:14px 0 6px' }, '👥 Membros (' + S.members.length + ')'),
+      S.members.length ? S.members.map((m, i) => {
+        const sl = h('select', { onchange: (e) => put('/members/' + m.id, { name: m.name, def: Number(e.target.value) }) },
+          h('option', { value: '', disabled: true, selected: m.def === null }, '?'),
+          [0, 1, 2, 3, 4].map((n) => h('option', { value: n, selected: m.def === n }, n + '/4')));
+        return h('div', { class: 'item', style: 'display:flex;gap:8px;align-items:center;justify-content:space-between' },
+          h('div', {}, h('b', {}, (i + 1) + '. ' + m.name), h('div', { class: 'muted', style: 'font-size:12px' }, (m.took.length ? '🏢 ' + m.took.map((n) => '#' + n).join(' ') : 'sem prédios pegos') + (m.editedAt ? ' · ✏️ corrigido' : ''))),
+          h('div', { class: 'dbtns' }, sl,
+            h('button', { class: 'btn danger small', onclick: () => { if (confirm('Remover ' + m.name + ' desta guerra?')) put('/members/' + m.id, undefined, 'DELETE'); } }, '✕')));
+      }) : h('p', { class: 'muted' }, 'Ninguém marcou nada ainda.'));
+  };
+  api(A).then((r) => { S = r; draw(); }).catch((e) => live.replaceChildren(h('p', { class: 'muted' }, e.message)));
+  const publish = async () => {
+    try { await save(); const r = await api(A + '/publish', { method: 'POST' }); S = r.state; draw(); toast('Ficha e tabela atualizadas no Discord!', 'ok'); await reloadData(false); } catch (e) { toast(e.message, 'err'); }
+  };
+  return h('div', {},
+    card('⚔️ Guerra de gangues (Idle Mafia)', 'Os membros marcam a defesa (0 a 4 times) e o andamento dos 9 prédios por botões no canal do anúncio. A tabela completa aparece no canal de análise e aqui, e só você corrige.',
+      chk(g, 'enabled', 'Ficha da guerra ligada'),
+      h('div', { class: 'row' },
+        field('Fase da guerra', sel(g, 'phase', [{ v: 'defesa', t: '🛡️ Dia da defesa' }, { v: 'ataque', t: '⚔️ Dia da guerra (ataque)' }], { empty: null })),
+        field('Cor das mensagens', cInput(g, 'color'))),
+      h('div', { class: 'row' },
+        field('Canal do anúncio da guerra (ficha dos membros)', sel(g, 'announceChannelId', chOpts(), { empty: '— escolher —' })),
+        field('Canal da análise (tabela dos líderes)', sel(g, 'analysisChannelId', chOpts(), { empty: '— escolher —' }))),
+      h('div', { class: 'dbtns', style: 'margin-top:10px' }, h('button', { class: 'btn', onclick: publish }, '📌 Salvar e publicar/atualizar no Discord'))),
+    card('🏢 Os 9 prédios desta guerra', 'O número (#1 a #9) é fixo. Atualize o nome e o nível uma vez por guerra: os botões e as tabelas usam esta lista.',
+      g.buildings.map((b) => h('div', { class: 'row', style: 'align-items:end' },
+        field('#' + b.n + ' — nome do prédio', tInput(b, 'name', { ph: 'Ex.: Posto de Gasolina', max: 30 })),
+        field('Nível', sel(b, 'level', [{ v: 0, t: 'sem nível' }, { v: 1, t: 'Nv.1 (10000)' }, { v: 2, t: 'Nv.2 (30000)' }, { v: 3, t: 'Nv.3 (90000)' }], { empty: null, num: true }))))),
+    card('📊 Andamento da guerra', 'Corrija qualquer marcação dos membros aqui. As mudanças aparecem no Discord em instantes.', live,
+      h('div', { class: 'dbtns', style: 'margin-top:12px' },
+        h('button', { class: 'btn danger small', onclick: async () => { if (confirm('Começar uma nova guerra? Isso apaga as marcações da guerra atual (a lista dos prédios fica).')) { if (await put('/reset', undefined, 'POST')) toast('Nova guerra iniciada.', 'ok'); } } }, '🔄 Nova guerra (zerar marcações)'))));
 }
 
 function tabTelefone() {
@@ -1637,7 +1696,7 @@ function tabExpressions() {
     log, gallery);
 }
 
-const TAB_FN = { home: tabHome, messages: tabMessages, wiki: tabWiki, tickets: tabTickets, telefone: tabTelefone, coaching: tabCoaching, autoroles: tabAutoroles, moderation: tabModeration, logs: tabLogs, welcome: () => tabCard('welcome'), leave: () => tabCard('leave'), kick: () => tabCard('kick'), roles: tabRoles, reactroles: tabReactRoles, alerts: tabAlerts, stats: tabStats, levels: tabLevels, commands: tabCommands, interaction: tabInteraction, translate: tabTranslate, games: tabGames, identity: tabIdentity, expressions: tabExpressions, premium: tabPremium };
+const TAB_FN = { home: tabHome, messages: tabMessages, wiki: tabWiki, tickets: tabTickets, telefone: tabTelefone, coaching: tabCoaching, guerra: tabGuerra, autoroles: tabAutoroles, moderation: tabModeration, logs: tabLogs, welcome: () => tabCard('welcome'), leave: () => tabCard('leave'), kick: () => tabCard('kick'), roles: tabRoles, reactroles: tabReactRoles, alerts: tabAlerts, stats: tabStats, levels: tabLevels, commands: tabCommands, interaction: tabInteraction, translate: tabTranslate, games: tabGames, identity: tabIdentity, expressions: tabExpressions, premium: tabPremium };
 
 /* ---------- salvar / carregar ---------- */
 async function save() {

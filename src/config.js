@@ -88,6 +88,7 @@ function defaults() {
     reactionRoles: [],
     stats: { enabled: false, categoryId: '', items: [] },
     alerts: { enabled: false, items: [] },
+    guerra: { enabled: false, phase: 'defesa', announceChannelId: '', announceMessageId: '', analysisChannelId: '', analysisMessageId: '', staffRoleIds: [], color: '#c0392b', buildings: Array.from({ length: 9 }, (_, k) => ({ n: k + 1, name: '', level: 0 })) },
     coaching: { enabled: false, welcomeEnabled: false, welcomeText: '', welcomeImage: '', categoryId: '', channelIds: [], staffRoleIds: [], tableChannelId: '', tableMessageId: '', color: '#e67e22' },
     identity: { nick: '', avatar: '', banner: '', bio: '' },
     moderation: {
@@ -384,6 +385,28 @@ function sanitizeAlerts(x, old) {
   };
 }
 
+// Guerra de gangues: ficha no canal do anúncio + tabela dos líderes (9 prédios fixos #1..#9)
+function sanitizeGuerra(x, old) {
+  x = x && typeof x === 'object' ? x : {};
+  const o = old?.guerra || {};
+  const ann = sid(x.announceChannelId), ana = sid(x.analysisChannelId);
+  const src = Array.isArray(x.buildings) ? x.buildings : [];
+  return {
+    enabled: bool(x.enabled, false),
+    phase: oneOf(x.phase, ['defesa', 'ataque'], 'defesa'),
+    announceChannelId: ann,
+    announceMessageId: ann && ann === o.announceChannelId ? o.announceMessageId || '' : '',
+    analysisChannelId: ana,
+    analysisMessageId: ana && ana === o.analysisChannelId ? o.analysisMessageId || '' : '',
+    staffRoleIds: idList(x.staffRoleIds, 10),
+    color: col(x.color, '#c0392b'),
+    buildings: Array.from({ length: 9 }, (_, k) => {
+      const b = src.find((y) => y && Number(y.n) === k + 1) || src[k] || {};
+      return { n: k + 1, name: str(b.name, 30).trim(), level: int(b.level, 0, 3, 0) };
+    }),
+  };
+}
+
 // Coaching de gangue (leitura de prints de formações)
 function sanitizeCoaching(x, old) {
   x = x && typeof x === 'object' ? x : {};
@@ -608,6 +631,7 @@ function sanitize(input, old) {
   out.stats = sanitizeStats(i.stats, old);
   out.alerts = sanitizeAlerts(i.alerts, old);
   out.coaching = sanitizeCoaching(i.coaching, old);
+  out.guerra = sanitizeGuerra(i.guerra, old);
   out.identity = sanitizeIdentity(i.identity);
   out.moderation = sanitizeModeration(i.moderation);
 
@@ -817,6 +841,12 @@ function setCoachingTable(guildId, messageId) {
   db.data.guilds[guildId] = c;
   db.save();
 }
+function setGuerraMessage(guildId, which, messageId) {
+  const c = getConfig(guildId);
+  c.guerra[which === 'analysis' ? 'analysisMessageId' : 'announceMessageId'] = messageId;
+  db.data.guilds[guildId] = c;
+  db.save();
+}
 function setStatsChannel(guildId, id, channelId) {
   const m = getConfig(guildId).stats.items.find((x) => x.id === id);
   if (!m) return;
@@ -825,4 +855,4 @@ function setStatsChannel(guildId, id, channelId) {
   db.save();
 }
 
-module.exports = { setCoachingTable, setReactionMessage, setStatsChannel, ALERT_DEFAULT, defaults, getConfig, setConfig, validate, setPanelMessage, setMessageRef, setWikiListIds, setTicketPanelMessage, nextTicketNumber, nextTelefoneNumber, setTelefoneBlocked, newId };
+module.exports = { setGuerraMessage, setCoachingTable, setReactionMessage, setStatsChannel, ALERT_DEFAULT, defaults, getConfig, setConfig, validate, setPanelMessage, setMessageRef, setWikiListIds, setTicketPanelMessage, nextTicketNumber, nextTelefoneNumber, setTelefoneBlocked, newId };
