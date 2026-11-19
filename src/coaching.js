@@ -6,6 +6,7 @@ const {
   PermissionFlagsBits, MessageFlags, AttachmentBuilder,
 } = require('discord.js');
 const cfgs = require('./config');
+const uploads = require('./uploads');
 const db = require('./db');
 const premium = require('./premium');
 
@@ -305,7 +306,10 @@ async function handleChannel(ch) {
   db.save?.();
   const text = String(c.welcomeText || DEFAULT_WELCOME).replace(/\{member\}/g, '<@' + member.id + '>');
   const payload = { content: text.slice(0, 1900), allowedMentions: { users: [member.id] } };
-  if (fs.existsSync(GUIA)) payload.files = [new AttachmentBuilder(GUIA, { name: 'passo-a-passo-formacoes.jpg' })];
+  // imagem enviada pelo painel (do celular ou link); sem ela, usa o passo a passo padrão
+  const mine = c.welcomeImage ? (c.welcomeImage.startsWith('up:') ? uploads.resolve(ch.guild.id, c.welcomeImage) : c.welcomeImage) : null;
+  if (mine) payload.files = [new AttachmentBuilder(mine, { name: 'boas-vindas' + (path.extname(String(mine).split('?')[0]) || '.png') })];
+  else if (fs.existsSync(GUIA)) payload.files = [new AttachmentBuilder(GUIA, { name: 'passo-a-passo-formacoes.jpg' })];
   await ch.send(payload).catch((e) => { delete done[ch.id]; throw e; });
 }
 

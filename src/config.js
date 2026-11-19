@@ -88,7 +88,7 @@ function defaults() {
     reactionRoles: [],
     stats: { enabled: false, categoryId: '', items: [] },
     alerts: { enabled: false, items: [] },
-    coaching: { enabled: false, welcomeEnabled: false, welcomeText: '', categoryId: '', channelIds: [], staffRoleIds: [], tableChannelId: '', tableMessageId: '', color: '#e67e22' },
+    coaching: { enabled: false, welcomeEnabled: false, welcomeText: '', welcomeImage: '', categoryId: '', channelIds: [], staffRoleIds: [], tableChannelId: '', tableMessageId: '', color: '#e67e22' },
     identity: { nick: '', avatar: '', banner: '', bio: '' },
     moderation: {
       staffRoleIds: [],
@@ -393,6 +393,7 @@ function sanitizeCoaching(x, old) {
     enabled: bool(x.enabled, false),
     welcomeEnabled: bool(x.welcomeEnabled, false),
     welcomeText: str(x.welcomeText, 1500).trim(),
+    welcomeImage: img(x.welcomeImage),
     categoryId: sid(x.categoryId),
     channelIds: idList(x.channelIds, 50),
     staffRoleIds: idList(x.staffRoleIds, 10),
