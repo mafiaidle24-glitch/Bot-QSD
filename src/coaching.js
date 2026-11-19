@@ -3,7 +3,7 @@
 // uma tabela atualizada no Discord e no painel. A equipe pode corrigir qualquer erro de leitura.
 const {
   EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle,
-  PermissionFlagsBits, MessageFlags,
+  PermissionFlagsBits, MessageFlags, AttachmentBuilder,
 } = require('discord.js');
 const cfgs = require('./config');
 const db = require('./db');
@@ -78,7 +78,7 @@ const listMembers = (gid) => Object.entries(store(gid).members).map(([id, m]) =>
 
 /* ------------------------------ Gemini ------------------------------ */
 const PROMPT = `Esta é uma captura de tela do jogo Idle Mafia, tela "Formações" (times de Capos).
-Extraia TODOS os times visíveis. Para cada time devolva: "name" (nome do time como aparece, ex: "Att/def 1", "Def 3"), "power" (o poder exatamente como aparece, número com unidade, ex: "407.5T") e "capos" (lista com os nomes dos Capos do time, se der para ler; senão lista vazia).
+Extraia apenas os 4 times de guerra: os chamados "TIME 1", "TIME 2", "TIME 3" e "TIME 4" (podem ter sufixo DEF ou DEF/ATK). IGNORE "Batalha Amistosa", "TIME 0", arena, kingpin, times com nomes livres e times vazios (poder 0). Se não existirem times com esses nomes, devolva os times que tiverem Capos e poder maior que 0. Para cada time devolva: "name" (nome do time como aparece, ex: "TIME 1 DEF/ATK", "TIME 3 DEF"), "power" (o poder exatamente como aparece, número com unidade, ex: "407.5T") e "capos" (lista com os nomes dos Capos do time, se der para ler; senão lista vazia).
 Responda SOMENTE com JSON no formato {"teams":[{"name":"","power":"","capos":[""]}]}.
 Se a imagem não for a tela de Formações do jogo, responda {"teams":[]}. Não invente valores: se algo não estiver legível, deixe o campo vazio.`;
 
@@ -268,4 +268,45 @@ async function handleInteraction(i) {
   }
 }
 
-module.exports = { handleMessage, handleInteraction, refreshTable, listMembers, saveMember, deleteMember, normTeams, normPower, powerValue, formatValue, readPrint, gemini, parseLine };
+/* --------------- boas-vindas no canal de coaching novo --------------- */
+const path = require('path');
+const fs = require('fs');
+const GUIA = path.join(__dirname, '..', 'assets', 'coaching-guia.jpg');
+const DEFAULT_WELCOME = 'Bem-vindo(a) ao seu canal de coaching, {member}! 🕴️ Aqui a liderança vai te orientar. Siga o passo a passo da imagem para montar seus times e depois envie o print da tela **Formações** no canal de formações.';
+
+// O membro do canal = o único com permissão própria de ver o canal que não é da equipe nem bot.
+async function findNewMember(ch, cfg) {
+  const ids = [];
+  for (const ow of ch.permissionOverwrites?.cache?.values?.() || []) {
+    if (ow.type !== 1 && String(ow.type) !== 'member') continue;
+    if (!ow.allow?.has?.(PermissionFlagsBits.ViewChannel)) continue;
+    ids.push(ow.id);
+  }
+  const people = [];
+  for (const id of ids) {
+    const m = await ch.guild.members.fetch(id).catch(() => null);
+    if (!m || m.user.bot || isStaff(m, cfg)) continue;
+    people.push(m);
+  }
+  return people.length === 1 ? people[0] : null;
+}
+
+async function handleChannel(ch) {
+  if (!ch?.guild || !ch.isTextBased?.() || ch.isThread?.() || !ch.parentId) return;
+  const cfg = cfgs.getConfig(ch.guild.id);
+  const c = cfg.coaching;
+  if (!c.enabled || !c.welcomeEnabled || !c.categoryId || ch.parentId !== c.categoryId) return;
+  if (ch.id === c.tableChannelId || c.channelIds.includes(ch.id)) return;
+  const done = (store(ch.guild.id).welcomed ??= {});
+  if (done[ch.id]) return;
+  const member = await findNewMember(ch, cfg);
+  if (!member) return;
+  done[ch.id] = Date.now(); // marca antes de enviar: nunca manda duas vezes
+  db.save?.();
+  const text = String(c.welcomeText || DEFAULT_WELCOME).replace(/\{member\}/g, '<@' + member.id + '>');
+  const payload = { content: text.slice(0, 1900), allowedMentions: { users: [member.id] } };
+  if (fs.existsSync(GUIA)) payload.files = [new AttachmentBuilder(GUIA, { name: 'passo-a-passo-formacoes.jpg' })];
+  await ch.send(payload).catch((e) => { delete done[ch.id]; throw e; });
+}
+
+module.exports = { handleChannel, DEFAULT_WELCOME, handleMessage, handleInteraction, refreshTable, listMembers, saveMember, deleteMember, normTeams, normPower, powerValue, formatValue, readPrint, gemini, parseLine };

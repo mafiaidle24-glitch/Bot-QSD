@@ -461,6 +461,8 @@ async function handleTranslate(msg, cfg) {
 
 // Cargos por reação de emoji
 client.on(Events.MessageReactionAdd, (reaction, user) => reactroles.handle(reaction, user, true));
+client.on(Events.ChannelCreate, (ch) => { coaching.handleChannel(ch).catch((e) => warn('coaching', e)); });
+client.on(Events.ChannelUpdate, (_o, ch) => { coaching.handleChannel(ch).catch((e) => warn('coaching', e)); });
 client.on(Events.MessageReactionRemove, (reaction, user) => reactroles.handle(reaction, user, false));
 
 // Tradução por reação de bandeira. Tem logs "[bandeira]" em cada etapa para achar onde falha.
