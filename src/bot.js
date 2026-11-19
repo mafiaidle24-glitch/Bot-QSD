@@ -25,6 +25,7 @@ const reactroles = require('./reactroles');
 const stats = require('./stats');
 const alertas = require('./alertas');
 const coaching = require('./coaching');
+const guerra = require('./guerra');
 
 const EPHEMERAL = MessageFlags.Ephemeral;
 const BASE_URL = (process.env.BASE_URL || 'http://localhost:3000').replace(/\/$/, '');
@@ -869,6 +870,7 @@ client.on(Events.InteractionCreate, async (i) => {
     if ((i.isButton() || i.isStringSelectMenu()) && i.customId.startsWith('tf:')) return await telefone.handleInteraction(i);
     if (!i.guild) return;
     if ((i.isButton() || i.isModalSubmit()) && i.customId.startsWith('co:')) return await coaching.handleInteraction(i);
+    if ((i.isButton() || i.isModalSubmit() || i.isStringSelectMenu()) && i.customId.startsWith('gu:')) return await guerra.handleInteraction(i);
     if (i.isChatInputCommand()) return await runSlash(i);
     if (i.isStringSelectMenu() && i.customId.startsWith('rpg:')) return await rpg.handleSelect(i);
     if (i.isButton()) {
