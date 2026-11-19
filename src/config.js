@@ -88,6 +88,7 @@ function defaults() {
     reactionRoles: [],
     stats: { enabled: false, categoryId: '', items: [] },
     alerts: { enabled: false, items: [] },
+    pontos: { enabled: false, channelId: '', rankChannelId: '', rankMessageId: '', goal: 0, color: '#e67e22' },
     guerra: { enabled: false, phase: 'defesa', announceChannelId: '', announceMessageId: '', analysisChannelId: '', analysisMessageId: '', staffRoleIds: [], color: '#c0392b', buildings: Array.from({ length: 9 }, (_, k) => ({ n: k + 1, name: '', level: 0 })) },
     coaching: { enabled: false, welcomeEnabled: false, welcomeText: '', welcomeImage: '', categoryId: '', channelIds: [], staffRoleIds: [], tableChannelId: '', tableMessageId: '', color: '#e67e22' },
     identity: { nick: '', avatar: '', banner: '', bio: '' },
@@ -385,6 +386,23 @@ function sanitizeAlerts(x, old) {
   };
 }
 
+// Pontos semanais da gangue (ranking em imagem a partir dos prints da líder)
+function sanitizePontos(x, old) {
+  x = x && typeof x === 'object' ? x : {};
+  const o = old?.pontos || {};
+  const ch = sid(x.channelId), rk = sid(x.rankChannelId);
+  const target = rk || ch;
+  const oldTarget = o.rankChannelId || o.channelId;
+  return {
+    enabled: bool(x.enabled, false),
+    channelId: ch,
+    rankChannelId: rk,
+    rankMessageId: target && target === oldTarget ? o.rankMessageId || '' : '',
+    goal: int(x.goal, 0, 100000, 0),
+    color: col(x.color, '#e67e22'),
+  };
+}
+
 // Guerra de gangues: ficha no canal do anúncio + tabela dos líderes (9 prédios fixos #1..#9)
 function sanitizeGuerra(x, old) {
   x = x && typeof x === 'object' ? x : {};
@@ -632,6 +650,7 @@ function sanitize(input, old) {
   out.alerts = sanitizeAlerts(i.alerts, old);
   out.coaching = sanitizeCoaching(i.coaching, old);
   out.guerra = sanitizeGuerra(i.guerra, old);
+  out.pontos = sanitizePontos(i.pontos, old);
   out.identity = sanitizeIdentity(i.identity);
   out.moderation = sanitizeModeration(i.moderation);
 
@@ -847,6 +866,12 @@ function setGuerraMessage(guildId, which, messageId) {
   db.data.guilds[guildId] = c;
   db.save();
 }
+function setPontosMessage(guildId, messageId) {
+  const c = getConfig(guildId);
+  c.pontos.rankMessageId = messageId;
+  db.data.guilds[guildId] = c;
+  db.save();
+}
 function setStatsChannel(guildId, id, channelId) {
   const m = getConfig(guildId).stats.items.find((x) => x.id === id);
   if (!m) return;
@@ -855,4 +880,4 @@ function setStatsChannel(guildId, id, channelId) {
   db.save();
 }
 
-module.exports = { setGuerraMessage, setCoachingTable, setReactionMessage, setStatsChannel, ALERT_DEFAULT, defaults, getConfig, setConfig, validate, setPanelMessage, setMessageRef, setWikiListIds, setTicketPanelMessage, nextTicketNumber, nextTelefoneNumber, setTelefoneBlocked, newId };
+module.exports = { setPontosMessage, setGuerraMessage, setCoachingTable, setReactionMessage, setStatsChannel, ALERT_DEFAULT, defaults, getConfig, setConfig, validate, setPanelMessage, setMessageRef, setWikiListIds, setTicketPanelMessage, nextTicketNumber, nextTelefoneNumber, setTelefoneBlocked, newId };

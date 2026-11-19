@@ -19,6 +19,7 @@ const stats = require('./stats');
 const alertas = require('./alertas');
 const coaching = require('./coaching');
 const guerra = require('./guerra');
+const pontos = require('./pontos');
 const { renderCard } = require('./card');
 const { LANGS } = require('./translate');
 
@@ -410,6 +411,30 @@ function startWeb(bot) {
     coaching.deleteMember(req.guild.id, String(req.params.uid));
     coaching.refreshTable(bot.client, req.guild.id);
     res.json({ ok: true, members: coaching.listMembers(req.guild.id) });
+  }));
+  // ----- Pontos semanais -----
+  const pView = (gid, key) => { const k = /^\d{4}-\d{2}-\d{2}$/.test(key || '') ? key : pontos.weekKey(Date.now()); return { current: pontos.weekKey(Date.now()), week: pontos.listWeek(gid, k), weeks: pontos.weeks(gid) }; };
+  app.get('/api/guilds/:id/pontos', requireAuth, guildAccess, wrap(async (req, res) => {
+    res.json(pView(req.guild.id, req.query.week));
+  }));
+  app.put('/api/guilds/:id/pontos/:week/members', requireAuth, guildAccess, wrap(async (req, res) => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(req.params.week)) return res.status(400).json({ error: 'Semana inválida.' });
+    const name = String(req.body?.name || '').trim().slice(0, 40);
+    if (!name) return res.status(400).json({ error: 'Digite o nome do membro.' });
+    const nkey = String(req.body?.id || name).normalize('NFKC').toLowerCase().replace(/\s+/g, ' ').slice(0, 40);
+    pontos.setMember(req.guild.id, req.params.week, nkey, name, req.body?.points);
+    res.json(pView(req.guild.id, req.params.week));
+  }));
+  app.delete('/api/guilds/:id/pontos/:week/members', requireAuth, guildAccess, wrap(async (req, res) => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(req.params.week)) return res.status(400).json({ error: 'Semana inválida.' });
+    pontos.removeMember(req.guild.id, req.params.week, String(req.body?.id || ''));
+    res.json(pView(req.guild.id, req.params.week));
+  }));
+  app.post('/api/guilds/:id/pontos/:week/publish', requireAuth, guildAccess, wrap(async (req, res) => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(req.params.week)) return res.status(400).json({ error: 'Semana inválida.' });
+    const msg = await pontos.publish(bot.client, req.guild.id, req.params.week);
+    if (!msg) return res.status(400).json({ error: 'Não foi possível postar: confira o canal, se o ranking está ligado e se já há membros nesta semana.' });
+    res.json({ ok: true, config: cfgs.getConfig(req.guild.id).pontos, ...pView(req.guild.id, req.params.week) });
   }));
   // ----- Guerra de gangues -----
   app.get('/api/guilds/:id/guerra', requireAuth, guildAccess, wrap(async (req, res) => {
