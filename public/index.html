@@ -689,6 +689,7 @@ function tabCoaching() {
       field('Cor das mensagens', cInput(c, 'color')),
       chk(c, 'welcomeEnabled', '👋 Boas-vindas automáticas nos canais de coaching novos (manda o passo a passo em imagem e marca o membro)'),
       field('Categoria dos canais de coaching (onde as boas-vindas funcionam)', sel(c, 'categoryId', (st.data.categories || []).map((x) => ({ v: x.id, t: '📁 ' + x.name })), { empty: '— nenhuma —' }), 'Quando você criar um canal novo nessa categoria e der acesso a um membro, o bot manda a imagem e marca essa pessoa (a equipe é ignorada).'),
+      field('Imagem das boas-vindas', imgPicker(c, 'welcomeImage', false, true), 'Envie qualquer imagem do celular (ou cole um link). Vazio = o passo a passo padrão das Formações.'),
       field('Texto das boas-vindas (use {member} para marcar o membro)', tArea(c, 'welcomeText', { rows: 3, max: 1500, vars: ['{member}'] }), 'Em branco = texto padrão.'),
       h('div', { class: 'dbtns', style: 'margin-top:10px' }, h('button', { class: 'btn', onclick: refresh }, '📌 Salvar e atualizar a tabela no Discord'))),
     card('📋 Formações dos membros', 'Toque em um membro para corrigir qualquer erro de leitura da IA.', tbl),
