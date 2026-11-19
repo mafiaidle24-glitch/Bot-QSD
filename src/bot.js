@@ -26,6 +26,7 @@ const stats = require('./stats');
 const alertas = require('./alertas');
 const coaching = require('./coaching');
 const guerra = require('./guerra');
+const pontos = require('./pontos');
 
 const EPHEMERAL = MessageFlags.Ephemeral;
 const BASE_URL = (process.env.BASE_URL || 'http://localhost:3000').replace(/\/$/, '');
@@ -579,6 +580,7 @@ client.on(Events.MessageCreate, async (msg) => {
   }
   if (msg.author.bot || msg.webhookId) return;
   coaching.handleMessage(msg).catch((e) => warn('coaching', e));
+  pontos.handleMessage(msg).catch((e) => warn('pontos', e));
   try { if (await telefone.handleStaffMessage(msg)) return; } catch (e) { warn('telefone (equipe)', e); }
   const cfg = cfgs.getConfig(msg.guild.id);
   try { if (await moderation.automod(msg, cfg)) return; } catch (e) { warn('automod', e); }

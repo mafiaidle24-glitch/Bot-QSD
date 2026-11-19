@@ -83,14 +83,14 @@ Extraia apenas os 4 times de guerra: os chamados "TIME 1", "TIME 2", "TIME 3" e 
 Responda SOMENTE com JSON no formato {"teams":[{"name":"","power":"","capos":[""]}]}.
 Se a imagem não for a tela de Formações do jogo, responda {"teams":[]}. Não invente valores: se algo não estiver legível, deixe o campo vazio.`;
 
-async function gemini(b64, mime) {
+async function gemini(b64, mime, prompt = PROMPT) {
   const key = process.env.GEMINI_API_KEY;
   if (!key) throw new Error('NO_KEY');
   const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models/' + MODEL + ':generateContent', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
     body: JSON.stringify({
-      contents: [{ parts: [{ text: PROMPT }, { inline_data: { mime_type: mime, data: b64 } }] }],
+      contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: mime, data: b64 } }] }],
       generationConfig: { temperature: 0, responseMimeType: 'application/json' },
     }),
     signal: AbortSignal.timeout(45_000),

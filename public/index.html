@@ -273,7 +273,7 @@ function msgPreview(text, imgEl) {
 
 /* ---------- abas ---------- */
 const TABS = [
-  ['home', '🏠 Início'], ['welcome', '👋 Boas-vindas'], ['leave', '🚪 Saída'], ['kick', '👢 Expulsão'], ['roles', '🎛️ Cargos / Botões'], ['reactroles', '🙋 Cargos por reação'], ['alerts', '🔔 Alertas'], ['stats', '📊 Estatísticas'], ['messages', '📨 Mensagens / Embeds'], ['wiki', '📖 Wiki de Capos'], ['tickets', '🎫 Tickets'], ['coaching', '🕴️ Coaching'], ['guerra', '⚔️ Guerra'], ['telefone', '📞 Telefone Vermelho'], ['autoroles', '🏷️ Autoroles'], ['moderation', '🔨 Moderação'], ['logs', '📜 Logs'],
+  ['home', '🏠 Início'], ['welcome', '👋 Boas-vindas'], ['leave', '🚪 Saída'], ['kick', '👢 Expulsão'], ['roles', '🎛️ Cargos / Botões'], ['reactroles', '🙋 Cargos por reação'], ['alerts', '🔔 Alertas'], ['stats', '📊 Estatísticas'], ['messages', '📨 Mensagens / Embeds'], ['wiki', '📖 Wiki de Capos'], ['tickets', '🎫 Tickets'], ['coaching', '🕴️ Coaching'], ['guerra', '⚔️ Guerra'], ['pontos', '🏆 Pontos semanais'], ['telefone', '📞 Telefone Vermelho'], ['autoroles', '🏷️ Autoroles'], ['moderation', '🔨 Moderação'], ['logs', '📜 Logs'],
   ['levels', '⭐ Rank / Níveis'], ['commands', '⌨️ Comandos'], ['interaction', '💬 Interação'],
   ['translate', '🌐 Tradução'], ['games', '🎮 Mini jogos'], ['identity', '🎭 Identidade'], ['expressions', '😀 Emojis / Figurinhas'], ['premium', '💎 Premium'],
 ];
@@ -700,6 +700,51 @@ function tabCoaching() {
       h('li', {}, 'O bot responde com o que leu e dois botões: ✏️ Corrigir e 🗑️ Descartar (só a equipe usa).'),
       h('li', {}, 'Um print novo do mesmo membro substitui o anterior, então quase não ocupa espaço.'),
       h('li', {}, 'Plano grátis: poucos prints lidos por dia. No 💎 Premium o limite é bem maior.'))));
+}
+
+function tabPontos() {
+  const c = st.cfg.pontos;
+  const A = '/api/guilds/' + st.gid + '/pontos';
+  const box = h('div', {}, h('p', { class: 'muted' }, 'Carregando…'));
+  let V = null, wk = null;
+  const load = async (key) => { try { V = await api(A + (key ? '?week=' + key : '')); wk = V.week.key; draw(); } catch (e) { box.replaceChildren(h('p', { class: 'muted' }, e.message)); } };
+  const call = async (url, method, body) => { try { V = await api(A + '/' + wk + url, { method, body }); draw(); return true; } catch (e) { toast(e.message, 'err'); return false; } };
+  const draw = () => {
+    if (!V) return;
+    const w = V.week;
+    const weekSel = h('select', { onchange: (e) => load(e.target.value) },
+      (V.weeks.some((x) => x.key === V.current) ? V.weeks : [{ key: V.current, label: 'semana atual' }, ...V.weeks]).map((x) =>
+        h('option', { value: x.key, selected: x.key === wk }, (x.key === V.current ? '⭐ ' : '') + x.label + (x.count ? ' · ' + x.count + ' membros' : ''))));
+    const nm = h('input', { type: 'text', placeholder: 'Nome no jogo', maxlength: 40, style: 'flex:1;min-width:120px' });
+    const pt = h('input', { type: 'number', min: 0, max: 100000, placeholder: 'Pontos', style: 'width:100px' });
+    box.replaceChildren(
+      h('div', { class: 'dbtns', style: 'margin-bottom:8px;align-items:center' }, h('span', {}, 'Semana: '), weekSel),
+      h('div', { class: 'muted', style: 'font-size:12px;margin-bottom:8px' }, w.rows.length + ' membros · total ' + w.total + ' pontos · ' + w.zero + ' sem pontos' + (w.gang ? ' · Gangue nível ' + w.gang.level + ' (' + w.gang.exp + '/' + w.gang.expMax + ')' : '')),
+      h('div', { class: 'dbtns', style: 'margin-bottom:10px' }, nm, pt, h('button', { class: 'btn small', onclick: async () => { if (!nm.value.trim()) return; if (await call('/members', 'PUT', { name: nm.value.trim(), points: Number(pt.value) || 0 })) toast('Salvo.', 'ok'); } }, '＋ Adicionar / corrigir')),
+      w.rows.length ? w.rows.map((r, i) => {
+        const inp = h('input', { type: 'number', min: 0, max: 100000, value: r.points, style: 'width:90px' });
+        return h('div', { class: 'item', style: 'display:flex;gap:8px;align-items:center;justify-content:space-between' },
+          h('div', {}, h('b', {}, (i + 1) + '. ' + r.name), h('div', { class: 'muted', style: 'font-size:12px' }, (r.role || '—') + (r.lastSeen ? ' · visto ' + r.lastSeen : '') + (r.edited ? ' · ✏️ corrigido' : ''))),
+          h('div', { class: 'dbtns' }, inp,
+            h('button', { class: 'btn green small', onclick: () => call('/members', 'PUT', { id: r.id, name: r.name, points: Number(inp.value) || 0 }) }, 'Salvar'),
+            h('button', { class: 'btn danger small', onclick: () => { if (confirm('Remover ' + r.name + ' desta semana?')) call('/members', 'DELETE', { id: r.id }); } }, '✕')));
+      }) : h('p', { class: 'muted' }, 'Nenhum membro nesta semana ainda. Envie os prints da tela "Minha Gangue" no canal de pontos.'),
+      h('div', { class: 'dbtns', style: 'margin-top:12px' },
+        h('button', { class: 'btn', onclick: async () => { try { await save(); const r = await api(A + '/' + wk + '/publish', { method: 'POST' }); V = { current: r.current, week: r.week, weeks: r.weeks }; draw(); toast('Ranking postado/atualizado no Discord!', 'ok'); await reloadData(false); } catch (e) { toast(e.message, 'err'); } } }, '🏆 Postar / atualizar o ranking agora')));
+  };
+  load();
+  return h('div', {},
+    card('🏆 Pontos semanais da gangue', 'A liderança envia os prints da tela "Minha Gangue" no canal de pontos. O bot lê nome, cargo e pontos de cada membro e mantém uma imagem de ranking atualizada. A semana vai de domingo 21h a sábado 20h59.',
+      st.data.geminiKey ? null : h('div', { class: 'warn' }, '⚠️ A leitura por IA ainda não está ligada: o dono do bot precisa colocar a chave GEMINI_API_KEY na hospedagem.'),
+      chk(c, 'enabled', 'Ranking de pontos ligado'),
+      h('div', { class: 'row' },
+        field('Canal onde a liderança envia os prints', sel(c, 'channelId', chOpts(), { empty: '— escolher —' }), 'Só quem tem a permissão Gerenciar Servidor alimenta o ranking.'),
+        field('Canal onde o ranking aparece (opcional)', sel(c, 'rankChannelId', chOpts(), { empty: 'o mesmo canal' }))),
+      h('div', { class: 'row' },
+        field('Meta mínima da semana (0 = sem meta)', nInput(c, 'goal', 0, 100000, 10), 'Quem estiver abaixo da meta aparece em laranja na imagem.'),
+        field('Cor do ranking', cInput(c, 'color'))),
+      h('div', { class: 'muted', style: 'font-size:12px' }, 'Depois de mudar as opções, clique em "Postar / atualizar o ranking agora" abaixo (ele salva antes).')),
+    card('📈 Pontos por semana', 'Corrija qualquer número ou adicione um membro. Semanas anteriores ficam guardadas por 12 semanas.', box));
 }
 
 function tabGuerra() {
@@ -1696,7 +1741,7 @@ function tabExpressions() {
     log, gallery);
 }
 
-const TAB_FN = { home: tabHome, messages: tabMessages, wiki: tabWiki, tickets: tabTickets, telefone: tabTelefone, coaching: tabCoaching, guerra: tabGuerra, autoroles: tabAutoroles, moderation: tabModeration, logs: tabLogs, welcome: () => tabCard('welcome'), leave: () => tabCard('leave'), kick: () => tabCard('kick'), roles: tabRoles, reactroles: tabReactRoles, alerts: tabAlerts, stats: tabStats, levels: tabLevels, commands: tabCommands, interaction: tabInteraction, translate: tabTranslate, games: tabGames, identity: tabIdentity, expressions: tabExpressions, premium: tabPremium };
+const TAB_FN = { home: tabHome, messages: tabMessages, wiki: tabWiki, tickets: tabTickets, telefone: tabTelefone, coaching: tabCoaching, guerra: tabGuerra, pontos: tabPontos, autoroles: tabAutoroles, moderation: tabModeration, logs: tabLogs, welcome: () => tabCard('welcome'), leave: () => tabCard('leave'), kick: () => tabCard('kick'), roles: tabRoles, reactroles: tabReactRoles, alerts: tabAlerts, stats: tabStats, levels: tabLevels, commands: tabCommands, interaction: tabInteraction, translate: tabTranslate, games: tabGames, identity: tabIdentity, expressions: tabExpressions, premium: tabPremium };
 
 /* ---------- salvar / carregar ---------- */
 async function save() {
