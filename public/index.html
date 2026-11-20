@@ -741,7 +741,7 @@ function tabPontos() {
       w.rows.length ? w.rows.map((r, i) => {
         const inp = h('input', { type: 'number', min: 0, max: 100000, value: r.points, style: 'width:90px' });
         return h('div', { class: 'item', style: 'display:flex;gap:8px;align-items:center;justify-content:space-between' },
-          h('div', {}, h('b', {}, (i + 1) + '. ' + r.name), h('div', { class: 'muted', style: 'font-size:12px' }, (r.role || '—') + (r.lastSeen ? ' · visto ' + r.lastSeen : '') + (r.edited ? ' · ✏️ corrigido' : ''))),
+          h('div', {}, h('b', {}, (i + 1) + '. ' + r.name), h('div', { class: 'muted', style: 'font-size:12px' }, (r.role || '—') + (r.rank ? ' · Rank ' + r.rank : '') + (r.lastSeen ? ' · visto ' + r.lastSeen : '') + (r.edited ? ' · ✏️ corrigido' : ''))),
           h('div', { class: 'dbtns' }, inp,
             h('button', { class: 'btn green small', onclick: () => call('/members', 'PUT', { id: r.id, name: r.name, points: Number(inp.value) || 0 }) }, 'Salvar'),
             h('button', { class: 'btn danger small', onclick: () => { if (confirm('Remover ' + r.name + ' desta semana?')) call('/members', 'DELETE', { id: r.id }); } }, '✕')));
