@@ -115,7 +115,7 @@ async function gemini(b64, mime, prompt = PROMPT) {
   if (!key) throw new Error('NO_KEY');
   const tried = new Set();
   const order = [goodModel, process.env.GEMINI_MODEL, ...FALLBACK_MODELS].filter(Boolean);
-  let r = null, listed = false, timedOut = false;
+  let r = null, listed = false, timedOut = false, busy = false;
   for (let k = 0; k < order.length; k++) {
     const model = order[k];
     if (tried.has(model)) continue;
@@ -128,6 +128,15 @@ async function gemini(b64, mime, prompt = PROMPT) {
       }
       throw e;
     }
+    // Google ocupado (500/502/503/504): espera um pouco e tenta de novo; se insistir, passa para outro modelo
+    for (let t = 0; t < 2 && r && [500, 502, 503, 504].includes(r.status); t++) {
+      console.warn('[ia] modelo "' + model + '" ocupado (' + r.status + '), tentando de novo...');
+      await new Promise((ok) => setTimeout(ok, 2500 * (t + 1)));
+      try { r = await callModel(model, key, prompt, b64, mime); }
+      catch (e) { if (e && (e.name === 'TimeoutError' || e.name === 'AbortError')) { timedOut = true; r = null; break; } throw e; }
+    }
+    if (!r) continue;
+    if ([500, 502, 503, 504].includes(r.status)) { busy = true; if (k < order.length - 1) continue; }
     if (r.status === 404) {
       console.warn('[ia] modelo "' + model + '" não encontrado (404), tentando outro...');
       // acabou a lista fixa: pergunta ao Google o que a chave pode usar
@@ -140,6 +149,7 @@ async function gemini(b64, mime, prompt = PROMPT) {
     if (r.ok) goodModel = model;
     break;
   }
+  if (r && [500, 502, 503, 504].includes(r.status)) throw new Error('A IA do Google está ocupada agora. Tente de novo em um minuto.');
   if (!r && timedOut) throw new Error('A IA demorou demais para responder. Tente de novo em instantes.');
   if (!r) throw new Error('Não consegui falar com a IA agora. Tente de novo em instantes.');
   if (r.status === 429) throw new Error('A IA está com muitos pedidos agora. Tente de novo em um minuto.');
