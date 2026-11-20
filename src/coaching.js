@@ -103,9 +103,10 @@ async function callModel(model, key, prompt, b64, mime) {
     headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
     body: JSON.stringify({
       contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: mime, data: b64 } }] }],
-      generationConfig: { temperature: 0, responseMimeType: 'application/json' },
+      // modelos 2.5 "pensam" antes de responder (lento); para ler prints não precisa
+      generationConfig: Object.assign({ temperature: 0, responseMimeType: 'application/json' }, /2\.5-flash/.test(model) ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
     }),
-    signal: AbortSignal.timeout(45_000),
+    signal: AbortSignal.timeout(70_000),
   });
 }
 
@@ -114,12 +115,19 @@ async function gemini(b64, mime, prompt = PROMPT) {
   if (!key) throw new Error('NO_KEY');
   const tried = new Set();
   const order = [goodModel, process.env.GEMINI_MODEL, ...FALLBACK_MODELS].filter(Boolean);
-  let r = null, listed = false;
+  let r = null, listed = false, timedOut = false;
   for (let k = 0; k < order.length; k++) {
     const model = order[k];
     if (tried.has(model)) continue;
     tried.add(model);
-    r = await callModel(model, key, prompt, b64, mime);
+    try { r = await callModel(model, key, prompt, b64, mime); }
+    catch (e) {
+      if (e && (e.name === 'TimeoutError' || e.name === 'AbortError')) {
+        console.warn('[ia] modelo "' + model + '" demorou demais, tentando outro...');
+        timedOut = true; r = null; if (model === goodModel) goodModel = null; continue;
+      }
+      throw e;
+    }
     if (r.status === 404) {
       console.warn('[ia] modelo "' + model + '" não encontrado (404), tentando outro...');
       // acabou a lista fixa: pergunta ao Google o que a chave pode usar
@@ -132,6 +140,8 @@ async function gemini(b64, mime, prompt = PROMPT) {
     if (r.ok) goodModel = model;
     break;
   }
+  if (!r && timedOut) throw new Error('A IA demorou demais para responder. Tente de novo em instantes.');
+  if (!r) throw new Error('Não consegui falar com a IA agora. Tente de novo em instantes.');
   if (r.status === 429) throw new Error('A IA está com muitos pedidos agora. Tente de novo em um minuto.');
   if (r.status === 400 || r.status === 403) {
     const detail = await r.text().catch(() => '');
