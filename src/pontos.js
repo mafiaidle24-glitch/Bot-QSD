@@ -15,7 +15,7 @@ const warn = (where, e) => console.error('[pontos] erro em ' + where + ':', e?.m
 
 const PROMPT = `Esta é uma captura de tela do jogo Idle Mafia. Pode ser a tela "Minha Gangue" (lista de membros com "Contribuição Semanal") ou a tela "Hall da Gangue".
 Para a lista de membros, devolva cada membro visível com: "name" (nome exatamente como aparece), "role" (Chefe, Sub-Chefe, Gangster, Picciotto...), "points" (número inteiro ANTES da barra em "N/2740"), "max" (número depois da barra), "lastSeen" (texto como "5d atrás" ou "48m atrás"; escreva "online" se houver bolinha verde) e "rank" (número no canto direito).
-Se aparecer o texto "Tempo de Atualização Semanal de Contribuição da Gangue: 3d 19h", devolva "resetIn" com o tempo exatamente como está (ex.: "3d 19h").
+Se (e somente se) o texto "Tempo de Atualização Semanal de Contribuição da Gangue" estiver visível na imagem, devolva "resetIn" com o tempo que aparece depois dos dois pontos; caso contrário devolva "resetIn": "".
 Se for a tela Hall da Gangue, devolva também "gang": {"level": número do "Nível", "exp": "1.974M", "expMax": "4M"}.
 Responda SOMENTE com JSON: {"members":[{"name":"","role":"","points":0,"max":0,"lastSeen":"","rank":0}],"resetIn":"","gang":{"level":0,"exp":"","expMax":""}}
 Se a imagem não for nenhuma dessas telas, responda {"members":[]}. Não invente valores.`;
@@ -60,9 +60,9 @@ function week(gid, key) {
 /* ------------------------------ Dados ------------------------------ */
 function ingest(gid, parsed, atMs) {
   const list = Array.isArray(parsed?.members) ? parsed.members : [];
-  const reset = parseReset(parsed?.resetIn);
-  const key = weekKey(reset !== null ? atMs + reset - 60e3 : atMs);
+  const key = weekKey(atMs); // pela hora da mensagem (o "resetIn" lido pela IA já veio errado antes)
   const w = week(gid, key);
+  for (const k of Object.keys(store(gid).weeks)) if (k > key) delete store(gid).weeks[k]; // semana do futuro = leitura errada
   let n = 0;
   for (const r of list.slice(0, 60)) {
     const name = clean(r?.name, 40);
@@ -190,19 +190,21 @@ async function handleMessage(msg) {
   if (rd.n + imgs.length > DAILY_READS) { await msg.reply('⏳ Limite de leituras de hoje atingido. Tente amanhã ou corrija pelo painel.').catch(() => {}); return; }
   await msg.react('⏳').catch(() => {});
   let total = 0, ok = 0, key = '';
-  const errs = [];
+  const errs = [], failed = [];
+  let idx = 0;
   for (const att of imgs) {
+    idx++;
     rd.n++;
     try {
       const j = await readOne(att);
       const r = ingest(gid, j, msg.createdTimestamp || Date.now());
-      if (r.count > 0 || j.gang) { ok++; total += r.count; key = r.key; } else errs.push('uma imagem não é a tela "Minha Gangue"');
-    } catch (e) { errs.push(e.message === 'NO_KEY' ? 'sem chave da IA' : /aborted|timeout/i.test(e.message) ? 'A IA demorou demais para responder' : e.message); }
+      if (r.count > 0 || j.gang) { ok++; total += r.count; key = r.key; } else { errs.push((imgs.length > 1 ? 'imagem ' + idx + ' de ' + imgs.length + ': ' : '') + 'não é a tela "Minha Gangue"'); failed.push(idx); }
+    } catch (e) { errs.push((imgs.length > 1 ? 'imagem ' + idx + ' de ' + imgs.length + ': ' : '') + (e.message === 'NO_KEY' ? 'sem chave da IA' : /aborted|timeout/i.test(e.message) ? 'a IA demorou demais para responder' : e.message.replace(/[.!?]\s*$/, '')) ); failed.push(idx); }
   }
   msg.reactions?.cache?.get('⏳')?.users.remove(msg.client.user.id).catch(() => {});
   if (ok > 0) {
     await msg.react('✅').catch(() => {});
-    await msg.reply('✅ Li **' + total + '** membro(s) (semana ' + weekLabel(key) + ').' + (errs.length ? ' ⚠️ ' + errs.join('; ') : '') + ' O ranking foi atualizado.').catch(() => {});
+    await msg.reply('✅ Li **' + total + '** membro(s) (semana ' + weekLabel(key) + ').' + ' O ranking foi atualizado.' + (errs.length ? '\n⚠️ Não consegui ler: ' + errs.join('; ') + '. Reenvie só ' + (failed.length > 1 ? 'essas imagens' : 'essa imagem') + '.' : '')).catch(() => {});
     publish(msg.client, gid, key).catch((e) => warn('ranking', e));
   } else {
     await msg.react('❌').catch(() => {});
