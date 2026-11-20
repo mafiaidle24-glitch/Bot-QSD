@@ -197,7 +197,7 @@ async function handleMessage(msg) {
       const j = await readOne(att);
       const r = ingest(gid, j, msg.createdTimestamp || Date.now());
       if (r.count > 0 || j.gang) { ok++; total += r.count; key = r.key; } else errs.push('uma imagem não é a tela "Minha Gangue"');
-    } catch (e) { errs.push(e.message === 'NO_KEY' ? 'sem chave da IA' : e.message); }
+    } catch (e) { errs.push(e.message === 'NO_KEY' ? 'sem chave da IA' : /aborted|timeout/i.test(e.message) ? 'A IA demorou demais para responder' : e.message); }
   }
   msg.reactions?.cache?.get('⏳')?.users.remove(msg.client.user.id).catch(() => {});
   if (ok > 0) {
@@ -206,7 +206,7 @@ async function handleMessage(msg) {
     publish(msg.client, gid, key).catch((e) => warn('ranking', e));
   } else {
     await msg.react('❌').catch(() => {});
-    await msg.reply('❌ ' + (errs[0] || 'Não consegui ler nada.') + ' Envie o print da tela **Minha Gangue**, inteiro e sem cortes.').catch(() => {});
+    await msg.reply('❌ ' + ((errs[0] || 'Não consegui ler nada.').replace(/[.!?]?\s*$/, '.')) + ' Envie o print da tela **Minha Gangue**, inteiro e sem cortes.').catch(() => {});
   }
 }
 
