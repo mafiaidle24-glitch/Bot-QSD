@@ -24,9 +24,19 @@ const clean = (v, n) => String(v ?? '').replace(/[\r\n\t]+/g, ' ').trim().slice(
 function setDef(gid, uid, name, n, opts = {}) {
   n = Math.max(0, Math.min(4, Math.floor(Number(n)) || 0));
   const g = store(gid);
-  const m = (g.members[uid] ??= { name: clean(name, 40) || uid, def: null, at: 0 });
+  const m = (g.members[uid] ??= { name: clean(name, 40) || uid, def: null, atk: null, at: 0 });
   if (name) m.name = clean(name, 40) || m.name;
   m.def = n; m.at = Date.now();
+  if (opts.edited) m.editedAt = Date.now();
+  db.save();
+  return m;
+}
+function setAtk(gid, uid, name, n, opts = {}) {
+  n = Math.max(0, Math.min(2, Math.floor(Number(n)) || 0));
+  const g = store(gid);
+  const m = (g.members[uid] ??= { name: clean(name, 40) || uid, def: null, atk: null, at: 0 });
+  if (name) m.name = clean(name, 40) || m.name;
+  m.atk = n; m.at = Date.now();
   if (opts.edited) m.editedAt = Date.now();
   db.save();
   return m;
@@ -68,22 +78,31 @@ function state(gid) {
   const g = store(gid);
   const members = Object.entries(g.members).map(([id, m]) => {
     const took = Object.entries(g.buildings).filter(([, b]) => b.by === id && b.remaining === 0).map(([n]) => Number(n)).sort((a, b) => a - b);
-    return { id, name: m.name, def: m.def, at: m.at, editedAt: m.editedAt || 0, took };
+    return { id, name: m.name, def: m.def, atk: m.atk ?? null, at: m.at, editedAt: m.editedAt || 0, took };
   }).sort((a, b) => (b.def ?? -1) - (a.def ?? -1) || a.name.localeCompare(b.name));
   const teams = members.reduce((s, m) => s + (m.def || 0), 0);
+  const attacks = members.reduce((s, m) => s + (m.atk || 0), 0);
   const buildings = Array.from({ length: 9 }, (_, k) => {
     const b = g.buildings[k + 1];
     return { n: k + 1, label: label(cfg, k + 1), remaining: b ? b.remaining : null, byName: b?.byName || '', at: b?.at || 0 };
   });
   return {
-    round: g.round, members, buildings, teams, points: teams * PTS_TEAM, gameTeams: g.gameTeams,
+    round: g.round, members, buildings, teams, attacks, atkFull: members.filter((m) => m.atk === 2).length, points: teams * PTS_TEAM, gameTeams: g.gameTeams,
     diff: g.gameTeams === null ? null : g.gameTeams - teams,
     full: members.filter((m) => m.def === 4).length,
   };
 }
 
 /* ------------------------------ Mensagens ------------------------------ */
-const phaseName = (c) => (c.phase === 'ataque' ? 'Dia da guerra (ataque)' : 'Dia da defesa');
+function phaseOf(c) {
+  if (c.phase === 'defesa' || c.phase === 'ataque') return c.phase;
+  const d = new Date(Date.now() - 3 * 3600e3); // Fortaleza (UTC-3)
+  const t = d.getUTCDay() * 24 + d.getUTCHours() + d.getUTCMinutes() / 60; // horas desde domingo 0h
+  if (t >= 3 * 24 + 21 && t < 4 * 24 + 21) return 'defesa'; // quarta 21h -> quinta 21h
+  if (t >= 4 * 24 + 21 && t < 5 * 24 + 21) return 'ataque'; // quinta 21h -> sexta 21h
+  return 'fora';
+}
+const phaseName = (c) => ({ defesa: 'Dia da defesa', ataque: 'Dia da guerra (ataque)' }[phaseOf(c)] || 'Guerra');
 
 function bldLine(b) {
   if (b.remaining === null) return '▫️ **' + b.label + '** — sem informação';
@@ -98,13 +117,15 @@ function announcePayload(gid) {
   const e = new EmbedBuilder().setColor(c.color).setTitle('⚔️ Guerra de gangues — ' + phaseName(c))
     .setDescription([
       '🛡️ **Defesa:** toque em **Defesa** e diga quantos times (0 a 4) você colocou.',
+      '⚔️ **Ataque:** toque em **Ataque** e diga quantos ataques (0 a 2) você já fez.',
       '🏢 **Prédios:** toque em **Atualizar prédio**, escolha o número e diga quantas equipes ainda faltam (**0** = prédio pego).',
       '📋 **Minha ficha** mostra só as suas marcações.',
       '', st.buildings.map(bldLine).join('\n'),
     ].join('\n'))
-    .setFooter({ text: st.members.length + ' membro(s) marcaram · ' + st.teams + ' time(s) na defesa · atualizado automaticamente' }).setTimestamp();
+    .setFooter({ text: st.members.length + ' membro(s) marcaram · ' + st.teams + ' time(s) na defesa · ' + st.attacks + ' ataque(s) · atualizado automaticamente' }).setTimestamp();
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId('gu:def').setLabel('Defesa').setEmoji('🛡️').setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId('gu:atk').setLabel('Ataque').setEmoji('⚔️').setStyle(ButtonStyle.Danger),
     new ButtonBuilder().setCustomId('gu:bld').setLabel('Atualizar prédio').setEmoji('🏢').setStyle(ButtonStyle.Success),
     new ButtonBuilder().setCustomId('gu:me').setLabel('Minha ficha').setEmoji('📋').setStyle(ButtonStyle.Secondary));
   return { embeds: [e], components: [row] };
@@ -114,11 +135,11 @@ function analysisPayload(gid) {
   const cfg = cfgs.getConfig(gid);
   const c = cfg.guerra;
   const st = state(gid);
-  const head = ['**Defesa:** ' + st.teams + ' time(s) · **' + st.points + '** pontos · ' + st.full + ' membro(s) com 4/4'];
+  const head = ['**Defesa:** ' + st.teams + ' time(s) · **' + st.points + '** pontos · ' + st.full + ' membro(s) com 4/4', '**Ataque:** ' + st.attacks + ' ataque(s) feito(s) · ' + st.atkFull + ' membro(s) com 2/2'];
   if (st.diff !== null) head.push(st.diff === 0 ? '✅ Bate com o placar do jogo (' + st.gameTeams + ' times).' : '⚠️ O jogo diz **' + st.gameTeams + '** time(s); marcado: **' + st.teams + '** (diferença ' + (st.diff > 0 ? '+' : '') + st.diff + ').');
   head.push('', '**Prédios**', st.buildings.map(bldLine).join('\n'));
   const e1 = new EmbedBuilder().setColor(c.color).setTitle('📊 Análise da guerra — ' + phaseName(c)).setDescription(head.join('\n').slice(0, 4000));
-  const lines = st.members.map((m, i) => '`' + String(i + 1).padStart(2, ' ') + '.` **' + m.name + '** — 🛡️ ' + (m.def === null ? '?' : m.def) + '/4' + (m.took.length ? ' · 🏢 ' + m.took.map((n) => '#' + n).join(' ') : '') + (m.editedAt ? ' ✏️' : ''));
+  const lines = st.members.map((m, i) => '`' + String(i + 1).padStart(2, ' ') + '.` **' + m.name + '** — 🛡️ ' + (m.def === null ? '?' : m.def) + '/4 · ⚔️ ' + (m.atk === null ? '?' : m.atk) + '/2' + (m.took.length ? ' · 🏢 ' + m.took.map((n) => '#' + n).join(' ') : '') + (m.editedAt ? ' ✏️' : ''));
   let desc = '', shown = 0;
   for (const l of lines) { if (desc.length + l.length + 1 > 3900) break; desc += l + '\n'; shown++; }
   if (shown < lines.length) desc += '… e mais ' + (lines.length - shown) + ' no painel.';
@@ -175,6 +196,7 @@ function mineEmbed(gid, uid) {
   return new EmbedBuilder().setColor(cfg.guerra.color).setTitle('📋 Minha ficha — ' + phaseName(cfg.guerra))
     .setDescription([
       '🛡️ **Defesa:** ' + (m && m.def !== null ? m.def + '/4 time(s)' : 'ainda não marcou'),
+      '⚔️ **Ataque:** ' + (m && m.atk !== null && m.atk !== undefined ? m.atk + '/2 ataque(s)' : 'ainda não marcou'),
       '🏢 **Prédios que você atualizou:**',
       mine.length ? mine.map(([n, b]) => '• ' + label(cfg, Number(n)) + ' — ' + (b.remaining === 0 ? 'pego ✅' : 'faltam ' + b.remaining)).join('\n') : '• nenhum ainda',
     ].join('\n'));
@@ -197,6 +219,17 @@ async function handleInteraction(i) {
       setDef(gid, i.user.id, nameOf(i), n);
       schedule(i.client, gid);
       return i.update({ content: '✅ Defesa registrada: **' + n + '/4** time(s).', components: [] });
+    }
+    if (i.isButton() && act === 'atk') {
+      const row = new ActionRowBuilder().addComponents([0, 1, 2].map((n) =>
+        new ButtonBuilder().setCustomId('gu:a:' + n).setLabel(n + '/2').setStyle(n === 2 ? ButtonStyle.Success : ButtonStyle.Secondary)));
+      return i.reply({ content: '⚔️ Quantos ataques você já fez?', components: [row], flags: EPHEMERAL });
+    }
+    if (i.isButton() && act === 'a') {
+      const n = Math.max(0, Math.min(2, Number(arg) || 0));
+      setAtk(gid, i.user.id, nameOf(i), n);
+      schedule(i.client, gid);
+      return i.update({ content: '✅ Ataque registrado: **' + n + '/2**.', components: [] });
     }
     if (i.isButton() && act === 'bld') {
       const menu = new StringSelectMenuBuilder().setCustomId('gu:bsel').setPlaceholder('Escolha o prédio…')
@@ -230,4 +263,4 @@ async function handleInteraction(i) {
   }
 }
 
-module.exports = { handleInteraction, refresh, schedule, state, setDef, setBuilding, deleteMember, setGameTeams, reset, label, announcePayload, analysisPayload, PTS_TEAM };
+module.exports = { handleInteraction, refresh, schedule, state, setDef, setAtk, phaseOf, setBuilding, deleteMember, setGameTeams, reset, label, announcePayload, analysisPayload, PTS_TEAM };

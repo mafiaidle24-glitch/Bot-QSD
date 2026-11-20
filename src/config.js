@@ -89,7 +89,7 @@ function defaults() {
     stats: { enabled: false, categoryId: '', items: [] },
     alerts: { enabled: false, items: [] },
     pontos: { enabled: false, channelId: '', rankChannelId: '', rankMessageId: '', goal: 0, color: '#e67e22' },
-    guerra: { enabled: false, phase: 'defesa', announceChannelId: '', announceMessageId: '', analysisChannelId: '', analysisMessageId: '', staffRoleIds: [], color: '#c0392b', buildings: Array.from({ length: 9 }, (_, k) => ({ n: k + 1, name: '', level: 0 })) },
+    guerra: { enabled: false, phase: 'auto', announceChannelId: '', announceMessageId: '', analysisChannelId: '', analysisMessageId: '', staffRoleIds: [], color: '#c0392b', buildings: Array.from({ length: 9 }, (_, k) => ({ n: k + 1, name: '', level: 0 })) },
     coaching: { enabled: false, welcomeEnabled: false, welcomeText: '', welcomeImage: '', categoryId: '', channelIds: [], staffRoleIds: [], tableChannelId: '', tableMessageId: '', color: '#e67e22' },
     identity: { nick: '', avatar: '', banner: '', bio: '' },
     moderation: {
@@ -411,7 +411,7 @@ function sanitizeGuerra(x, old) {
   const src = Array.isArray(x.buildings) ? x.buildings : [];
   return {
     enabled: bool(x.enabled, false),
-    phase: oneOf(x.phase, ['defesa', 'ataque'], 'defesa'),
+    phase: oneOf(x.phase, ['auto', 'defesa', 'ataque'], 'auto'),
     announceChannelId: ann,
     announceMessageId: ann && ann === o.announceChannelId ? o.announceMessageId || '' : '',
     analysisChannelId: ana,
