@@ -445,7 +445,8 @@ function startWeb(bot) {
     if (!/^\d{5,25}$/.test(uid)) return res.status(400).json({ error: 'Membro inválido.' });
     const old = guerra.state(req.guild.id).members.find((m) => m.id === uid);
     const name = String(req.body?.name || old?.name || '').slice(0, 40);
-    guerra.setDef(req.guild.id, uid, name, req.body?.def, { edited: true });
+    if (req.body?.def !== undefined && req.body.def !== null) guerra.setDef(req.guild.id, uid, name, req.body.def, { edited: true });
+    if (req.body?.atk !== undefined && req.body.atk !== null) guerra.setAtk(req.guild.id, uid, name, req.body.atk, { edited: true });
     guerra.schedule(bot.client, req.guild.id);
     res.json(guerra.state(req.guild.id));
   }));

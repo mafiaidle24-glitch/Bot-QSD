@@ -760,7 +760,7 @@ function tabGuerra() {
     const diff = S.diff === null ? '' : (S.diff === 0 ? ' ✅ bate com o placar do jogo' : ' ⚠️ diferença de ' + (S.diff > 0 ? '+' : '') + S.diff + ' time(s)');
     live.replaceChildren(
       h('div', { class: 'item' },
-        h('b', {}, 'Defesa: ' + S.teams + ' time(s) · ' + S.points + ' pontos · ' + S.full + ' membro(s) com 4/4'),
+        h('b', {}, 'Defesa: ' + S.teams + ' time(s) · ' + S.points + ' pontos · ' + S.full + ' com 4/4 · Ataque: ' + S.attacks + ' feito(s) · ' + S.atkFull + ' com 2/2'),
         h('div', { class: 'muted', style: 'font-size:12px;margin:4px 0' }, 'Cada time posicionado vale 25 pontos. Digite o total de times que o jogo mostra para conferir.' + diff),
         h('div', { class: 'dbtns' }, h('span', {}, 'Times no placar do jogo: '), chk2,
           h('button', { class: 'btn small', onclick: () => put('/check', { gameTeams: chk2.value === '' ? null : Number(chk2.value) }) }, 'Conferir'))),
@@ -774,12 +774,15 @@ function tabGuerra() {
       }),
       h('h4', { style: 'margin:14px 0 6px' }, '👥 Membros (' + S.members.length + ')'),
       S.members.length ? S.members.map((m, i) => {
-        const sl = h('select', { onchange: (e) => put('/members/' + m.id, { name: m.name, def: Number(e.target.value) }) },
-          h('option', { value: '', disabled: true, selected: m.def === null }, '?'),
-          [0, 1, 2, 3, 4].map((n) => h('option', { value: n, selected: m.def === n }, n + '/4')));
+        const sl = h('select', { title: 'Defesa', onchange: (e) => put('/members/' + m.id, { name: m.name, def: Number(e.target.value) }) },
+          h('option', { value: '', disabled: true, selected: m.def === null }, '🛡️ ?'),
+          [0, 1, 2, 3, 4].map((n) => h('option', { value: n, selected: m.def === n }, '🛡️ ' + n + '/4')));
+        const sa = h('select', { title: 'Ataque', onchange: (e) => put('/members/' + m.id, { name: m.name, atk: Number(e.target.value) }) },
+          h('option', { value: '', disabled: true, selected: m.atk === null }, '⚔️ ?'),
+          [0, 1, 2].map((n) => h('option', { value: n, selected: m.atk === n }, '⚔️ ' + n + '/2')));
         return h('div', { class: 'item', style: 'display:flex;gap:8px;align-items:center;justify-content:space-between' },
           h('div', {}, h('b', {}, (i + 1) + '. ' + m.name), h('div', { class: 'muted', style: 'font-size:12px' }, (m.took.length ? '🏢 ' + m.took.map((n) => '#' + n).join(' ') : 'sem prédios pegos') + (m.editedAt ? ' · ✏️ corrigido' : ''))),
-          h('div', { class: 'dbtns' }, sl,
+          h('div', { class: 'dbtns' }, sl, sa,
             h('button', { class: 'btn danger small', onclick: () => { if (confirm('Remover ' + m.name + ' desta guerra?')) put('/members/' + m.id, undefined, 'DELETE'); } }, '✕')));
       }) : h('p', { class: 'muted' }, 'Ninguém marcou nada ainda.'));
   };
@@ -791,15 +794,15 @@ function tabGuerra() {
     card('⚔️ Guerra de gangues (Idle Mafia)', 'Os membros marcam a defesa (0 a 4 times) e o andamento dos 9 prédios por botões no canal do anúncio. A tabela completa aparece no canal de análise e aqui, e só você corrige.',
       chk(g, 'enabled', 'Ficha da guerra ligada'),
       h('div', { class: 'row' },
-        field('Fase da guerra', sel(g, 'phase', [{ v: 'defesa', t: '🛡️ Dia da defesa' }, { v: 'ataque', t: '⚔️ Dia da guerra (ataque)' }], { empty: null })),
+        field('Fase da guerra', sel(g, 'phase', [{ v: 'auto', t: '🕘 Automática (quarta 21h defesa · quinta 21h ataque)' }, { v: 'defesa', t: '🛡️ Dia da defesa' }, { v: 'ataque', t: '⚔️ Dia da guerra (ataque)' }], { empty: null })),
         field('Cor das mensagens', cInput(g, 'color'))),
       h('div', { class: 'row' },
         field('Canal do anúncio da guerra (ficha dos membros)', sel(g, 'announceChannelId', chOpts(), { empty: '— escolher —' })),
         field('Canal da análise (tabela dos líderes)', sel(g, 'analysisChannelId', chOpts(), { empty: '— escolher —' }))),
       h('div', { class: 'dbtns', style: 'margin-top:10px' }, h('button', { class: 'btn', onclick: publish }, '📌 Salvar e publicar/atualizar no Discord'))),
-    card('🏢 Os 9 prédios desta guerra', 'O número (#1 a #9) é fixo. Atualize o nome e o nível uma vez por guerra: os botões e as tabelas usam esta lista.',
+    card('🏢 Os 9 prédios desta guerra', 'O que vale é o número (#1 a #9), que é fixo. O nome e o nível são opcionais: pode deixar em branco e os botões mostram só #1, #2…',
       g.buildings.map((b) => h('div', { class: 'row', style: 'align-items:end' },
-        field('#' + b.n + ' — nome do prédio', tInput(b, 'name', { ph: 'Ex.: Posto de Gasolina', max: 30 })),
+        field('#' + b.n + ' — nome (opcional)', tInput(b, 'name', { ph: 'Ex.: Posto de Gasolina', max: 30 })),
         field('Nível', sel(b, 'level', [{ v: 0, t: 'sem nível' }, { v: 1, t: 'Nv.1 (10000)' }, { v: 2, t: 'Nv.2 (30000)' }, { v: 3, t: 'Nv.3 (90000)' }], { empty: null, num: true }))))),
     card('📊 Andamento da guerra', 'Corrija qualquer marcação dos membros aqui. As mudanças aparecem no Discord em instantes.', live,
       h('div', { class: 'dbtns', style: 'margin-top:12px' },
