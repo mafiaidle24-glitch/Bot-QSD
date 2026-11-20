@@ -440,23 +440,44 @@ function startWeb(bot) {
   app.get('/api/guilds/:id/guerra', requireAuth, guildAccess, wrap(async (req, res) => {
     res.json(guerra.state(req.guild.id));
   }));
-  app.put('/api/guilds/:id/guerra/members/:uid', requireAuth, guildAccess, wrap(async (req, res) => {
-    const uid = String(req.params.uid);
-    if (!/^\d{5,25}$/.test(uid)) return res.status(400).json({ error: 'Membro inválido.' });
-    const old = guerra.state(req.guild.id).members.find((m) => m.id === uid);
-    const name = String(req.body?.name || old?.name || '').slice(0, 40);
-    if (req.body?.def !== undefined && req.body.def !== null) guerra.setDef(req.guild.id, uid, name, req.body.def, { edited: true });
-    if (req.body?.atk !== undefined && req.body.atk !== null) guerra.setAtk(req.guild.id, uid, name, req.body.atk, { edited: true });
+  const gerr = (res, e) => res.status(400).json({ error: e.message });
+  const okAid = (v) => /^a[0-9a-z]{1,8}$|^\d{15,25}$/.test(String(v));
+  app.put('/api/guilds/:id/guerra/members/:aid', requireAuth, guildAccess, wrap(async (req, res) => {
+    if (!okAid(req.params.aid)) return res.status(400).json({ error: 'Conta inválida.' });
+    try {
+      if (req.body?.def !== undefined && req.body.def !== null) guerra.setDef(req.guild.id, req.params.aid, req.body.def, { edited: true });
+      if (req.body?.atk !== undefined && req.body.atk !== null) guerra.setAtk(req.guild.id, req.params.aid, req.body.atk, { edited: true });
+    } catch (e) { return gerr(res, e); }
     guerra.schedule(bot.client, req.guild.id);
     res.json(guerra.state(req.guild.id));
   }));
-  app.delete('/api/guilds/:id/guerra/members/:uid', requireAuth, guildAccess, wrap(async (req, res) => {
-    guerra.deleteMember(req.guild.id, String(req.params.uid));
+  app.delete('/api/guilds/:id/guerra/members/:aid', requireAuth, guildAccess, wrap(async (req, res) => {
+    if (!okAid(req.params.aid)) return res.status(400).json({ error: 'Conta inválida.' });
+    guerra.removeAccount(req.guild.id, req.params.aid);
+    guerra.schedule(bot.client, req.guild.id);
+    res.json(guerra.state(req.guild.id));
+  }));
+  app.post('/api/guilds/:id/guerra/accounts', requireAuth, guildAccess, wrap(async (req, res) => {
+    const uid = String(req.body?.uid || '');
+    if (!/^\d{15,25}$/.test(uid)) return res.status(400).json({ error: 'Escolha o membro do Discord.' });
+    const m = req.guild.members.cache.get(uid) || await req.guild.members.fetch(uid).catch(() => null);
+    try { guerra.addAccount(req.guild.id, uid, m?.displayName || m?.user?.username || '', req.body?.name, { leader: true }); } catch (e) { return gerr(res, e); }
+    guerra.schedule(bot.client, req.guild.id);
+    res.json(guerra.state(req.guild.id));
+  }));
+  app.put('/api/guilds/:id/guerra/accounts/:aid', requireAuth, guildAccess, wrap(async (req, res) => {
+    if (!okAid(req.params.aid)) return res.status(400).json({ error: 'Conta inválida.' });
+    try { guerra.updateAccount(req.guild.id, req.params.aid, { name: req.body?.name, ok: req.body?.ok }); } catch (e) { return gerr(res, e); }
+    guerra.schedule(bot.client, req.guild.id);
+    res.json(guerra.state(req.guild.id));
+  }));
+  app.post('/api/guilds/:id/guerra/accounts-confirm-all', requireAuth, guildAccess, wrap(async (req, res) => {
+    for (const m of guerra.state(req.guild.id).members) if (!m.ok) guerra.updateAccount(req.guild.id, m.id, { ok: true });
     guerra.schedule(bot.client, req.guild.id);
     res.json(guerra.state(req.guild.id));
   }));
   app.put('/api/guilds/:id/guerra/buildings/:n', requireAuth, guildAccess, wrap(async (req, res) => {
-    try { guerra.setBuilding(req.guild.id, req.params.n, req.body?.remaining, '', req.body?.byName || 'Líder', { edited: true }); } catch (e) { return res.status(400).json({ error: e.message }); }
+    try { guerra.setBuilding(req.guild.id, req.params.n, req.body?.remaining, '', { edited: true, byName: req.body?.byName || 'Líder' }); } catch (e) { return res.status(400).json({ error: e.message }); }
     guerra.schedule(bot.client, req.guild.id);
     res.json(guerra.state(req.guild.id));
   }));
