@@ -241,7 +241,7 @@ async function handleInteraction(i) {
       if (!(n >= 1 && n <= 9)) return i.reply({ content: 'Prédio inválido.', flags: EPHEMERAL });
       const modal = new ModalBuilder().setCustomId('gu:bm:' + n).setTitle(label(cfg, n).slice(0, 45))
         .addComponents(new ActionRowBuilder().addComponents(
-          new TextInputBuilder().setCustomId('faltam').setLabel('Quantas equipes ainda faltam? (0 = prédio pego)').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(3).setPlaceholder('Ex.: 19')));
+          new TextInputBuilder().setCustomId('faltam').setLabel('Quantas equipes faltam? (0 = prédio pego)'.slice(0, 45)).setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(3).setPlaceholder('Ex.: 19')));
       return i.showModal(modal);
     }
     if (i.isModalSubmit() && act === 'bm') {
