@@ -36,9 +36,21 @@ header.top img{width:30px;height:30px;border-radius:50%}
 .gcard{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;display:flex;align-items:center;gap:12px}
 .gcard img,.gcard .ph{width:46px;height:46px;border-radius:50%;background:var(--gray);flex:none;display:grid;place-items:center;font-weight:700}
 .gcard .nm{flex:1;min-width:0;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-nav.tabs{display:flex;gap:6px;flex-wrap:wrap;margin:14px 0 18px}
-nav.tabs button{background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:7px 14px;cursor:pointer}
-nav.tabs button.on{background:var(--blue);border-color:var(--blue);font-weight:600}
+.menubar{display:flex;align-items:center;gap:12px;margin:12px 0 18px;padding:6px 0;position:sticky;top:0;z-index:20;background:var(--bg,#0f1115)}
+.burger{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:11px 12px;cursor:pointer;color:var(--text);display:grid;gap:4px;flex:none}
+.burger i{display:block;width:20px;height:2px;background:currentColor;border-radius:2px}
+.menubar .cur{font-weight:700;font-size:17px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.scrim{position:fixed;inset:0;background:rgba(0,0,0,.55);opacity:0;pointer-events:none;transition:opacity .2s;z-index:40}
+.scrim.open{opacity:1;pointer-events:auto}
+.drawer{position:fixed;top:0;bottom:0;left:0;width:min(82vw,320px);background:var(--panel);border-right:1px solid var(--line);transform:translateX(-102%);transition:transform .22s;z-index:50;display:flex;flex-direction:column}
+.drawer.open{transform:none}
+.drawer .dh{padding:16px;border-bottom:1px solid var(--line);font-weight:700;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.drawer .dh span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.drawer .dh button{background:none;border:0;color:var(--text);font-size:20px;cursor:pointer}
+.drawer .dl{overflow-y:auto;padding:8px;flex:1}
+.drawer .dl button{display:block;width:100%;text-align:left;background:none;border:0;color:var(--text);padding:12px 14px;border-radius:10px;cursor:pointer;font-size:15px}
+.drawer .dl button:hover{background:rgba(255,255,255,.05)}
+.drawer .dl button.on{background:var(--blue);font-weight:600}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:16px}
 .card h3{margin:0 0 4px;font-size:16px}
 .card>p.sub{margin:0 0 12px;color:var(--muted);font-size:13px}
@@ -281,12 +293,15 @@ const TABS = [
 function tabHome() {
   return h('div', {},
     !st.data.botCanManageRoles ? h('div', { class: 'warn' }, '⚠️ O bot não tem a permissão ', h('b', {}, 'Gerenciar Cargos'), ' neste servidor. Os botões de cargo e as recompensas de nível não vão funcionar até você dar essa permissão (e deixar o cargo do bot acima dos cargos que ele vai entregar).') : null,
-    card('Como usar', 'Escolha uma aba acima, ajuste e clique em "Salvar alterações" (barra que aparece embaixo). 💎 = recurso com limite no plano grátis ou exclusivo do Premium.',
+    card('Como usar', 'Abra o menu ☰ no topo, escolha uma aba, ajuste e clique em "Salvar alterações" (barra que aparece embaixo). 💎 = recurso com limite no plano grátis ou exclusivo do Premium.',
       h('ul', { class: 'cl' },
         h('li', {}, '👋 ', h('b', {}, 'Boas-vindas / Saída / Expulsão'), ': mensagem de texto e, no Premium, cartão com a foto do membro. O fundo do cartão pode ser enviado do aparelho. 💎'),
         h('li', {}, '🎛️ ', h('b', {}, 'Cargos / Botões'), ': painéis com botões coloridos para o membro pegar cargos. 💎'),
         h('li', {}, '📨 ', h('b', {}, 'Mensagens / Embeds'), ': avisos e regras com cores, imagens e campos, publicados em um canal. 💎'),
         h('li', {}, '📖 ', h('b', {}, 'Wiki de Capos'), ': fichas de personagens que o bot envia ao digitar ', h('code', {}, '!nome'), '. 💎'),
+        h('li', {}, '🕴️ ', h('b', {}, 'Coaching'), ': membros enviam o print das formações; o bot lê os 4 times e monta a tabela para a liderança. 💎'),
+        h('li', {}, '⚔️ ', h('b', {}, 'Guerra'), ': ficha com botões (defesa 0-4, ataque 0-2 e os 9 prédios) e tabela da líder.'),
+        h('li', {}, '🏆 ', h('b', {}, 'Pontos semanais'), ': a liderança envia os prints da tela Minha Gangue e o bot monta o ranking em imagem.'),
         h('li', {}, '🎫 ', h('b', {}, 'Tickets'), ': atendimento privado com tipos, equipe, log e transcrição. 💎'),
         h('li', {}, '📞 ', h('b', {}, 'Telefone Vermelho'), ': atendimento por mensagem privada, estilo ModMail: o membro fala com o bot e a equipe responde num canal privado. 💎 Premium'),
         h('li', {}, '🏷️ ', h('b', {}, 'Autoroles'), ': cargo automático para quem entra (visitante) e para bots. 💎 Premium'),
@@ -1789,8 +1804,13 @@ function renderTab() {
   st.onChange = null;
   clearInterval(st.payTimer);
   el.replaceChildren(tabNotice(st.tab), TAB_FN[st.tab]());
-  document.querySelectorAll('nav.tabs button').forEach((b) => b.classList.toggle('on', b.dataset.tab === st.tab));
+  document.querySelectorAll('.drawer .dl button').forEach((b) => b.classList.toggle('on', b.dataset.tab === st.tab));
+  const cur = $('#curtab'); if (cur) cur.textContent = (TABS.find((t) => t[0] === st.tab) || ['', ''])[1];
+  closeMenu();
+  window.scrollTo(0, 0);
 }
+function closeMenu() { document.querySelectorAll('.drawer,.scrim').forEach((x) => x.classList.remove('open')); }
+function openMenu() { document.querySelectorAll('.drawer,.scrim').forEach((x) => x.classList.add('open')); }
 
 function render() {
   const app = $('#app');
@@ -1813,8 +1833,14 @@ function render() {
   }
   app.append(h('div', { class: 'wrap' },
     h('h2', { style: 'margin:0' }, st.data.guild.name),
-    h('nav', { class: 'tabs' }, TABS.map(([k, label]) => h('button', { 'data-tab': k, class: k === st.tab ? 'on' : '', onclick: () => { st.tab = k; renderTab(); } }, label))),
+    h('div', { class: 'menubar' },
+      h('button', { class: 'burger', 'aria-label': 'Abrir menu', onclick: openMenu }, h('i'), h('i'), h('i')),
+      h('div', { class: 'cur', id: 'curtab' }, '')),
     h('div', { id: 'tabbody' })),
+    h('div', { class: 'scrim', onclick: closeMenu }),
+    h('div', { class: 'drawer' },
+      h('div', { class: 'dh' }, h('span', {}, st.data.guild.name), h('button', { 'aria-label': 'Fechar', onclick: closeMenu }, '✕')),
+      h('div', { class: 'dl' }, TABS.map(([k, label]) => h('button', { 'data-tab': k, class: k === st.tab ? 'on' : '', onclick: () => { st.tab = k; renderTab(); } }, label)))),
     h('div', { id: 'savebar', class: st.dirty ? 'show' : '' },
       h('span', {}, 'Você tem alterações não salvas.'),
       h('button', { class: 'btn green', onclick: () => save().catch((e) => toast(e.message, 'err')) }, '💾 Salvar alterações'),
