@@ -83,10 +83,22 @@ Extraia apenas os 4 times de guerra: os chamados "TIME 1", "TIME 2", "TIME 3" e 
 Responda SOMENTE com JSON no formato {"teams":[{"name":"","power":"","capos":[""]}]}.
 Se a imagem não for a tela de Formações do jogo, responda {"teams":[]}. Não invente valores: se algo não estiver legível, deixe o campo vazio.`;
 
-async function gemini(b64, mime, prompt = PROMPT) {
-  const key = process.env.GEMINI_API_KEY;
-  if (!key) throw new Error('NO_KEY');
-  const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models/' + MODEL + ':generateContent', {
+const BASE = 'https://generativelanguage.googleapis.com/v1beta/';
+const FALLBACK_MODELS = ['gemini-2.5-flash', 'gemini-flash-latest', 'gemini-2.0-flash', 'gemini-2.5-flash-lite', 'gemini-flash-lite-latest'];
+let goodModel = null; // modelo que já funcionou (lembra até reiniciar)
+
+// Pergunta ao Google quais modelos esta chave pode usar e devolve os "flash" que leem imagem.
+async function listModels(key) {
+  const r = await fetch(BASE + 'models?pageSize=100', { headers: { 'x-goog-api-key': key }, signal: AbortSignal.timeout(20_000) });
+  if (!r.ok) return [];
+  const j = await r.json();
+  return (j.models || [])
+    .filter((m) => (m.supportedGenerationMethods || []).includes('generateContent') && /flash/i.test(m.name) && !/image|tts|live|audio|thinking-exp|preview/i.test(m.name))
+    .map((m) => m.name.replace(/^models\//, ''));
+}
+
+async function callModel(model, key, prompt, b64, mime) {
+  return fetch(BASE + 'models/' + model + ':generateContent', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
     body: JSON.stringify({
@@ -95,9 +107,42 @@ async function gemini(b64, mime, prompt = PROMPT) {
     }),
     signal: AbortSignal.timeout(45_000),
   });
+}
+
+async function gemini(b64, mime, prompt = PROMPT) {
+  const key = process.env.GEMINI_API_KEY;
+  if (!key) throw new Error('NO_KEY');
+  const tried = new Set();
+  const order = [goodModel, process.env.GEMINI_MODEL, ...FALLBACK_MODELS].filter(Boolean);
+  let r = null, listed = false;
+  for (let k = 0; k < order.length; k++) {
+    const model = order[k];
+    if (tried.has(model)) continue;
+    tried.add(model);
+    r = await callModel(model, key, prompt, b64, mime);
+    if (r.status === 404) {
+      console.warn('[ia] modelo "' + model + '" não encontrado (404), tentando outro...');
+      // acabou a lista fixa: pergunta ao Google o que a chave pode usar
+      if (!listed && k === order.length - 1) {
+        listed = true;
+        try { for (const m of await listModels(key)) order.push(m); } catch { /* segue */ }
+      }
+      continue;
+    }
+    if (r.ok) goodModel = model;
+    break;
+  }
   if (r.status === 429) throw new Error('A IA está com muitos pedidos agora. Tente de novo em um minuto.');
-  if (r.status === 400 || r.status === 403) throw new Error('A chave da IA (GEMINI_API_KEY) foi recusada. Avise o dono do bot.');
-  if (!r.ok) throw new Error('A IA respondeu com erro ' + r.status + '.');
+  if (r.status === 400 || r.status === 403) {
+    const detail = await r.text().catch(() => '');
+    console.warn('[ia] erro ' + r.status + ': ' + detail.slice(0, 300));
+    throw new Error('A chave da IA (GEMINI_API_KEY) foi recusada. Avise o dono do bot.');
+  }
+  if (!r.ok) {
+    const detail = await r.text().catch(() => '');
+    console.warn('[ia] erro ' + r.status + ': ' + detail.slice(0, 300));
+    throw new Error('A IA respondeu com erro ' + r.status + (r.status === 404 ? ' (nenhum modelo de leitura de imagem disponível para a chave). Avise o dono do bot.' : '.'));
+  }
   const j = await r.json();
   const txt = (j.candidates?.[0]?.content?.parts || []).map((p) => p.text || '').join('').trim();
   const body = txt.replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();
