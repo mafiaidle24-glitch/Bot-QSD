@@ -272,7 +272,8 @@ async function handleInteraction(i) {
 /* --------------- boas-vindas no canal de coaching novo --------------- */
 const path = require('path');
 const fs = require('fs');
-const GUIA = path.join(__dirname, '..', 'assets', 'coaching-guia.jpg');
+const GUIA_PNG = path.join(__dirname, '..', 'assets', 'coaching-guia.png');
+const GUIA = fs.existsSync(GUIA_PNG) ? GUIA_PNG : path.join(__dirname, '..', 'assets', 'coaching-guia.jpg');
 const DEFAULT_WELCOME = 'Bem-vindo(a) ao seu canal de coaching, {member}! 🕴️ Aqui a liderança vai te orientar. Siga o passo a passo da imagem para montar seus times e depois envie o print da tela **Formações** no canal de formações.';
 
 // Quem recebe as boas-vindas: membros com permissão própria de ver o canal que não são da equipe nem bots.
@@ -311,7 +312,7 @@ async function welcome(ch, { force = false } = {}) {
   const payload = { content: text.slice(0, 1900), allowedMentions: { users: people.slice(0, 5).map((m) => m.id) } };
   const mine = c.welcomeImage ? (c.welcomeImage.startsWith('up:') ? uploads.resolve(ch.guild.id, c.welcomeImage) : c.welcomeImage) : null;
   if (mine) payload.files = [new AttachmentBuilder(mine, { name: 'boas-vindas' + (path.extname(String(mine).split('?')[0]) || '.png') })];
-  else if (fs.existsSync(GUIA)) payload.files = [new AttachmentBuilder(GUIA, { name: 'passo-a-passo-formacoes.jpg' })];
+  else if (fs.existsSync(GUIA)) payload.files = [new AttachmentBuilder(GUIA, { name: 'passo-a-passo-formacoes' + path.extname(GUIA) })];
   try { await ch.send(payload); } catch (e) {
     delete done[ch.id];
     const perm = e?.code === 50013 || e?.code === 50001;
