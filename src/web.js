@@ -495,6 +495,13 @@ function startWeb(bot) {
     await guerra.refresh(bot.client, req.guild.id);
     res.json(guerra.state(req.guild.id));
   }));
+  app.post('/api/guilds/:id/coaching/welcome-test', requireAuth, guildAccess, wrap(async (req, res) => {
+    const id = String(req.body?.channelId || '');
+    const ch = /^\d{15,25}$/.test(id) ? await req.guild.channels.fetch(id).catch(() => null) : null;
+    if (!ch) return res.status(400).json({ error: 'Escolha um canal.' });
+    const r = await coaching.welcome(ch, { force: true });
+    res.json(r);
+  }));
   app.post('/api/guilds/:id/coaching/table/refresh', requireAuth, guildAccess, wrap(async (req, res) => {
     await coaching.refreshTable(bot.client, req.guild.id);
     res.json({ ok: true, config: cfgs.getConfig(req.guild.id).coaching });

@@ -275,42 +275,55 @@ const fs = require('fs');
 const GUIA = path.join(__dirname, '..', 'assets', 'coaching-guia.jpg');
 const DEFAULT_WELCOME = 'Bem-vindo(a) ao seu canal de coaching, {member}! 🕴️ Aqui a liderança vai te orientar. Siga o passo a passo da imagem para montar seus times e depois envie o print da tela **Formações** no canal de formações.';
 
-// O membro do canal = o único com permissão própria de ver o canal que não é da equipe nem bot.
-async function findNewMember(ch, cfg) {
-  const ids = [];
+// Quem recebe as boas-vindas: membros com permissão própria de ver o canal que não são da equipe nem bots.
+async function findNewMembers(ch, cfg) {
+  const people = [], skipped = [];
   for (const ow of ch.permissionOverwrites?.cache?.values?.() || []) {
     if (ow.type !== 1 && String(ow.type) !== 'member') continue;
     if (!ow.allow?.has?.(PermissionFlagsBits.ViewChannel)) continue;
-    ids.push(ow.id);
+    const m = await ch.guild.members.fetch(ow.id).catch(() => null);
+    if (!m || m.user.bot) continue;
+    if (isStaff(m, cfg)) skipped.push(m.displayName || m.user.username); else people.push(m);
   }
-  const people = [];
-  for (const id of ids) {
-    const m = await ch.guild.members.fetch(id).catch(() => null);
-    if (!m || m.user.bot || isStaff(m, cfg)) continue;
-    people.push(m);
-  }
-  return people.length === 1 ? people[0] : null;
+  return { people, skipped };
 }
 
-async function handleChannel(ch) {
-  if (!ch?.guild || !ch.isTextBased?.() || ch.isThread?.() || !ch.parentId) return;
+// Tenta mandar as boas-vindas e devolve { sent, reason } (o motivo ajuda a achar o problema).
+async function welcome(ch, { force = false } = {}) {
+  if (!ch?.guild || !ch.isTextBased?.() || ch.isThread?.()) return { sent: false, reason: 'Esse não é um canal de texto.' };
   const cfg = cfgs.getConfig(ch.guild.id);
   const c = cfg.coaching;
-  if (!c.enabled || !c.welcomeEnabled || !c.categoryId || ch.parentId !== c.categoryId) return;
-  if (ch.id === c.tableChannelId || c.channelIds.includes(ch.id)) return;
+  if (!c.enabled) return { sent: false, reason: 'O coaching está desligado no painel.' };
+  if (!c.welcomeEnabled) return { sent: false, reason: 'As boas-vindas automáticas estão desligadas no painel.' };
+  if (!c.categoryId) return { sent: false, reason: 'Falta escolher a categoria dos canais de coaching.' };
+  if (ch.parentId !== c.categoryId) return { sent: false, reason: 'O canal não está dentro da categoria escolhida no painel.' };
+  if (ch.id === c.tableChannelId || c.channelIds.includes(ch.id)) return { sent: false, reason: 'Esse canal é o da tabela ou o de formações.' };
   const done = (store(ch.guild.id).welcomed ??= {});
-  if (done[ch.id]) return;
-  const member = await findNewMember(ch, cfg);
-  if (!member) return;
+  if (done[ch.id] && !force) return { sent: false, reason: 'As boas-vindas já foram enviadas neste canal.' };
+  const { people, skipped } = await findNewMembers(ch, cfg);
+  if (!people.length) {
+    return { sent: false, reason: 'Não achei nenhum membro (sem cargo de liderança) com acesso ao canal.' + (skipped.length ? ' Contei como liderança: ' + skipped.join(', ') + '. Se algum deles não é líder, tire o cargo dele da lista "Cargos que podem corrigir" ou a permissão Gerenciar Servidor.' : ' Adicione o membro ao canal pelo nome dele (não só por cargo).') };
+  }
   done[ch.id] = Date.now(); // marca antes de enviar: nunca manda duas vezes
   db.save?.();
-  const text = String(c.welcomeText || DEFAULT_WELCOME).replace(/\{member\}/g, '<@' + member.id + '>');
-  const payload = { content: text.slice(0, 1900), allowedMentions: { users: [member.id] } };
-  // imagem enviada pelo painel (do celular ou link); sem ela, usa o passo a passo padrão
+  const mentions = people.slice(0, 5).map((m) => '<@' + m.id + '>').join(' ');
+  const text = String(c.welcomeText || DEFAULT_WELCOME).replace(/\{member\}/g, mentions);
+  const payload = { content: text.slice(0, 1900), allowedMentions: { users: people.slice(0, 5).map((m) => m.id) } };
   const mine = c.welcomeImage ? (c.welcomeImage.startsWith('up:') ? uploads.resolve(ch.guild.id, c.welcomeImage) : c.welcomeImage) : null;
   if (mine) payload.files = [new AttachmentBuilder(mine, { name: 'boas-vindas' + (path.extname(String(mine).split('?')[0]) || '.png') })];
   else if (fs.existsSync(GUIA)) payload.files = [new AttachmentBuilder(GUIA, { name: 'passo-a-passo-formacoes.jpg' })];
-  await ch.send(payload).catch((e) => { delete done[ch.id]; throw e; });
+  try { await ch.send(payload); } catch (e) {
+    delete done[ch.id];
+    const perm = e?.code === 50013 || e?.code === 50001;
+    return { sent: false, reason: perm ? 'O bot não tem permissão para ver/escrever nesse canal. Dê ao cargo do bot acesso ao canal (Ver canal, Enviar mensagens e Anexar arquivos).' : 'Erro ao enviar: ' + (e?.message || e) };
+  }
+  return { sent: true, reason: 'Boas-vindas enviadas para ' + people.map((m) => m.displayName || m.user.username).join(', ') + '.' };
 }
 
-module.exports = { handleChannel, DEFAULT_WELCOME, handleMessage, handleInteraction, refreshTable, listMembers, saveMember, deleteMember, normTeams, normPower, powerValue, formatValue, readPrint, gemini, parseLine };
+async function handleChannel(ch) {
+  if (!ch?.guild || !ch.parentId) return;
+  const r = await welcome(ch);
+  if (!r.sent && !/já foram|não está dentro|desligad|Esse não/.test(r.reason)) console.log('[coaching] boas-vindas não enviadas (#' + ch.name + '): ' + r.reason);
+}
+
+module.exports = { handleChannel, welcome, DEFAULT_WELCOME, handleMessage, handleInteraction, refreshTable, listMembers, saveMember, deleteMember, normTeams, normPower, powerValue, formatValue, readPrint, gemini, parseLine };
