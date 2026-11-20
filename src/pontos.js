@@ -71,7 +71,9 @@ function ingest(gid, parsed, atMs) {
     const pts = Number(raw);
     if (pts > 100000) continue;
     const max = Math.floor(Number(r?.max)) || 2740;
-    w.members[nk(name)] = { name, role: clean(r?.role, 20), points: pts, max, lastSeen: clean(r?.lastSeen, 20), at: atMs };
+    const rk = Math.floor(Number(String(r?.rank ?? '').replace(/[.,\s]/g, '')));
+    const old = w.members[nk(name)];
+    w.members[nk(name)] = { name, role: clean(r?.role, 20), points: pts, max, lastSeen: clean(r?.lastSeen, 20), rank: rk >= 1 && rk <= 99999 ? rk : (old?.rank || 0), at: atMs };
     n++;
   }
   const g = parsed?.gang;
@@ -124,7 +126,7 @@ function imageOpts(gid, key, guildName) {
     title: 'RANKING SEMANAL',
     subtitle: (guildName ? guildName + ' · ' : '') + 'Semana ' + l.label,
     color: c.color,
-    rows: l.rows.map((r) => ({ name: r.name, role: r.role, points: r.points, max: r.max })),
+    rows: l.rows.map((r) => ({ name: r.name, role: r.role, rank: r.rank || 0, points: r.points, max: r.max })),
     max: 2740, goal: c.goal,
     gang: l.gang ? { ...l.gang, ratio: ratio(l.gang) } : null,
     summary: l.rows.length + ' membros · total ' + l.total + ' pontos · ' + l.zero + ' sem pontos',

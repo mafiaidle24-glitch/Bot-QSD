@@ -67,7 +67,14 @@ function draw(ctx, o, FONT = 'sans-serif') {
     ctx.beginPath(); ctx.arc(x + 30, cy, 19, 0, Math.PI * 2); ctx.fill();
     text(ctx, FONT, String(i + 1), x + 30, cy + 1, { size: 20, color: i < 3 ? '#1b1c20' : '#ffffff', align: 'center', maxW: 30 });
     text(ctx, FONT, strip(r.name) || '?', x + 62, cy - 9, { size: 24, color: '#ffffff', maxW: 250 });
-    text(ctx, FONT, strip(r.role || ''), x + 62, cy + 15, { size: 14, color: '#949ba4', weight: 'normal', maxW: 250 });
+    const roleTxt = strip(r.role || '');
+    text(ctx, FONT, roleTxt, x + 62, cy + 15, { size: 14, color: '#949ba4', weight: 'normal', maxW: 150 });
+    if (r.rank > 0) {
+      // "Rank 34" (posição da rua no jogo) logo depois do cargo
+      ctx.font = 'normal 14px ' + FONT;
+      const rx = x + 62 + Math.min(150, roleTxt ? ctx.measureText(roleTxt).width + 10 : 0);
+      text(ctx, FONT, (roleTxt ? '· ' : '') + 'Rank ' + r.rank, rx, cy + 15, { size: 14, color: accent, maxW: 100 });
+    }
     const max = r.max || o.max || 2740;
     const bx = x + 330, bw = L.colW - 330 - 130, bh = 18, by = cy - bh / 2;
     ctx.fillStyle = '#111214'; rr(ctx, bx, by, bw, bh, 9); ctx.fill();
