@@ -816,19 +816,27 @@ function tabGuerra() {
       }) : h('p', { class: 'muted' }, 'Nenhuma conta cadastrada ainda. Os membros cadastram pelo botão "Minhas contas" (ou você adiciona acima).'));
   };
   api(A).then((r) => { S = r; draw(); }).catch((e) => live.replaceChildren(h('p', { class: 'muted' }, e.message)));
+  const launchSheet = async (phase) => {
+    if (phase === 'defesa' && !confirm('Postar a ficha de DEFESA começa uma guerra nova e LIMPA as marcações da guerra anterior (as contas ficam). Continuar?')) return;
+    try { await save(); const r = await api(A + '/launch', { method: 'POST', body: { phase } }); S = r.state; draw(); toast('Ficha de ' + phase + ' postada no Discord!', 'ok'); await reloadData(false); } catch (e) { toast(e.message, 'err'); }
+  };
   const publish = async () => {
     try { await save(); const r = await api(A + '/publish', { method: 'POST' }); S = r.state; draw(); toast('Ficha e tabela atualizadas no Discord!', 'ok'); await reloadData(false); } catch (e) { toast(e.message, 'err'); }
   };
   return h('div', {},
     card('⚔️ Guerra de gangues (Idle Mafia)', 'Os membros marcam a defesa (0 a 4 times) e o andamento dos 9 prédios por botões no canal do anúncio. A tabela completa aparece no canal de análise e aqui, e só você corrige.',
       chk(g, 'enabled', 'Ficha da guerra ligada'),
+      chk(g, 'auto', '🤖 Postar sozinho: quarta 21h a ficha de defesa (guerra nova) e quinta 21h a de ataque'),
+      h('div', { class: 'muted', style: 'font-size:12px;margin:-4px 0 8px' }, 'Horário de Fortaleza. Você também pode usar no Discord os comandos /guerra defesa e /guerra ataque, ou os botões abaixo.'),
       h('div', { class: 'row' },
         field('Fase da guerra', sel(g, 'phase', [{ v: 'auto', t: '🕘 Automática (quarta 21h defesa · quinta 21h ataque)' }, { v: 'defesa', t: '🛡️ Dia da defesa' }, { v: 'ataque', t: '⚔️ Dia da guerra (ataque)' }], { empty: null })),
         field('Cor das mensagens', cInput(g, 'color'))),
       h('div', { class: 'row' },
         field('Canal do anúncio da guerra (ficha dos membros)', sel(g, 'announceChannelId', chOpts(), { empty: '— escolher —' })),
         field('Canal da análise (tabela dos líderes)', sel(g, 'analysisChannelId', chOpts(), { empty: '— escolher —' }))),
-      h('div', { class: 'dbtns', style: 'margin-top:10px' }, h('button', { class: 'btn', onclick: publish }, '📌 Salvar e publicar/atualizar no Discord'))),
+      h('div', { class: 'dbtns', style: 'margin-top:10px' }, h('button', { class: 'btn', onclick: publish }, '📌 Salvar e publicar/atualizar no Discord'),
+        h('button', { class: 'btn', onclick: () => launchSheet('defesa') }, '🛡️ Postar ficha de DEFESA agora'),
+        h('button', { class: 'btn', onclick: () => launchSheet('ataque') }, '⚔️ Postar ficha de ATAQUE agora'))),
     card('🏢 Os 9 prédios desta guerra', 'O que vale é o número (#1 a #9), que é fixo. O nome e o nível são opcionais: pode deixar em branco e os botões mostram só #1, #2…',
       g.buildings.map((b) => h('div', { class: 'row', style: 'align-items:end' },
         field('#' + b.n + ' — nome (opcional)', tInput(b, 'name', { ph: 'Ex.: Posto de Gasolina', max: 30 })),

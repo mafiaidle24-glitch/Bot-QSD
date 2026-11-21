@@ -742,6 +742,7 @@ const slashCommands = [
   ...premium.commands,
   ...diagnostico.commands,
   ...telefone.commands,
+  ...guerra.commands,
 ].map((c) => c.setDMPermission(false).toJSON());
 
 async function registerCommands(guild) {
@@ -761,6 +762,7 @@ async function runSlash(i) {
   if (await premium.handleSlash(i)) return;
   if (await diagnostico.handleSlash(i)) return;
   if (await telefone.handleSlash(i)) return;
+  if (await guerra.handleSlash(i)) return;
   switch (i.commandName) {
     case 'rank': {
       if (!cfg.levels.enabled) return i.reply({ content: 'O sistema de níveis está desativado.', flags: EPHEMERAL });
@@ -904,6 +906,8 @@ client.once(Events.ClientReady, async () => {
   setInterval(() => stats.tick(client).catch((e) => warn('estatísticas', e)), 10 * 60_000).unref?.();
   setTimeout(() => alertas.tick(client).catch((e) => warn('alertas', e)), 45_000);
   setInterval(() => alertas.tick(client).catch((e) => warn('alertas', e)), 5 * 60_000).unref?.();
+  setTimeout(() => guerra.tick(client).catch((e) => warn('guerra', e)), 20_000);
+  setInterval(() => guerra.tick(client).catch((e) => warn('guerra', e)), 60_000).unref?.();
   setTimeout(() => diagnostico.logStartup(), 5_000);
   setTimeout(() => identity.sweep(client), 20_000);
   setInterval(() => identity.sweep(client), 10 * 60_000).unref?.();

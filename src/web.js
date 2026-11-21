@@ -490,6 +490,12 @@ function startWeb(bot) {
     await guerra.refresh(bot.client, req.guild.id, { create: true });
     res.json({ ok: true, config: cfgs.getConfig(req.guild.id).guerra, state: guerra.state(req.guild.id) });
   }));
+  app.post('/api/guilds/:id/guerra/launch', requireAuth, guildAccess, wrap(async (req, res) => {
+    const phase = req.body?.phase === 'ataque' ? 'ataque' : 'defesa';
+    const r = await guerra.launch(bot.client, req.guild.id, phase, { clear: phase === 'defesa' && req.body?.clear !== false });
+    if (!r.ok) return res.status(400).json({ error: r.reason });
+    res.json({ ok: true, config: cfgs.getConfig(req.guild.id).guerra, state: guerra.state(req.guild.id) });
+  }));
   app.post('/api/guilds/:id/guerra/reset', requireAuth, guildAccess, wrap(async (req, res) => {
     guerra.reset(req.guild.id);
     await guerra.refresh(bot.client, req.guild.id);
