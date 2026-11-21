@@ -20,10 +20,10 @@ t('Siga os passos e envie UM print com os 4 times no canal de formações', W / 
 const steps = [
   ['Toque em Batalha', 'No canto inferior direito do jogo.'],
   ['Abra Formações', 'No canto superior da tela de Batalha.'],
-  ['Monte os 4 times de guerra', 'TIME 1, TIME 2, TIME 3 e TIME 4, com 5 Capos cada.'],
+  ['Monte e nomeie os 4 times da guerra', 'Time 1, 2, 3 e 4 (ou Ataque 1, Ataque 2, Defesa 3, Defesa 4), com 5 Capos cada.'],
   ['Não repita Capos', 'Um mesmo Capo não pode estar em dois times da guerra.'],
   ['Confira o poder dos times', 'Veja o poder de cada time antes de tirar o print.'],
-  ['Tire UM print com os 4 times', 'Os quatro times precisam aparecer na mesma imagem.'],
+  ['Tire UM print com os 4 times', 'Os quatro na mesma imagem. Mais de uma conta? Escreva o nome da conta na mensagem.'],
 ];
 let y = 175;
 steps.forEach(([a, b], i) => {

@@ -97,10 +97,24 @@ const deleteMember = (gid, uid) => { const g = store(gid); const had = !!g.membe
 const listMembers = (gid) => Object.entries(store(gid).members).map(([id, m]) => ({ id, ...m, totalText: formatValue(m.total) })).sort((a, b) => b.total - a.total);
 
 /* ------------------------------ Gemini ------------------------------ */
-const PROMPT = `Esta é uma captura de tela do jogo Idle Mafia, tela "Formações" (times de Capos).
-Extraia apenas os 4 times de guerra: os chamados "TIME 1", "TIME 2", "TIME 3" e "TIME 4" (podem ter sufixo DEF ou DEF/ATK). IGNORE "Batalha Amistosa", "TIME 0", arena, kingpin, times com nomes livres e times vazios (poder 0). Se não existirem times com esses nomes, devolva os times que tiverem Capos e poder maior que 0. Para cada time devolva: "name" (nome do time como aparece, ex: "TIME 1 DEF/ATK", "TIME 3 DEF"), "power" (o poder exatamente como aparece, número com unidade, ex: "407.5T") e "capos" (lista com os nomes dos Capos do time, se der para ler; senão lista vazia).
+const PROMPT = `Esta é uma captura de tela do jogo Idle Mafia, tela "Formações" (times de Capos, mostrados em duas colunas).
+Extraia TODOS os times visíveis que tenham poder maior que 0 ou Capos, na ordem em que aparecem na tela (linha por linha, da esquerda para a direita), mesmo que tenham nomes personalizados. IGNORE só os times vazios (poder 0 e sem Capos).
+Para cada time devolva: "name" (o nome do time EXATAMENTE como aparece escrito na tela, incluindo o número, ex: "Time 1", "Ataque 2", "Defesa 3", "ataque/Def 1", "BT 1", "KP"), "power" (o poder exatamente como aparece, número com unidade, ex: "407.5T") e "capos" (lista com os nomes dos Capos do time, se der para ler; senão lista vazia).
 Responda SOMENTE com JSON no formato {"teams":[{"name":"","power":"","capos":[""]}]}.
 Se a imagem não for a tela de Formações do jogo, responda {"teams":[]}. Não invente valores: se algo não estiver legível, deixe o campo vazio.`;
+
+// Times da guerra = os que se chamam "Time 1..4", "Ataque 1", "Ataque 2", "Defesa 3", "Defesa 4", "ataque/Def 1"...
+// (cada membro salva de um jeito). Vale o primeiro número do nome (1 a 4); se repetir, vale o que aparece primeiro na tela.
+const WAR_NAME = /^\s*(?:time|team|ataque|attack|atk|defesas?|def)[^\d]*?(\d+)/i;
+function warTeams(list) {
+  const byNum = new Map();
+  for (const t of Array.isArray(list) ? list : []) {
+    const m = t && typeof t.name === 'string' ? WAR_NAME.exec(t.name) : null;
+    const n = m ? parseInt(m[1], 10) : 0;
+    if (n >= 1 && n <= 4 && !byNum.has(n)) byNum.set(n, t);
+  }
+  return [...byNum.entries()].sort((a, b) => a[0] - b[0]).map(([, t]) => t);
+}
 
 const BASE = 'https://generativelanguage.googleapis.com/v1beta/';
 const FALLBACK_MODELS = ['gemini-2.5-flash', 'gemini-flash-latest', 'gemini-2.0-flash', 'gemini-2.5-flash-lite', 'gemini-flash-lite-latest'];
@@ -196,7 +210,9 @@ async function readPrint(att) {
   if (buf.length > MAX_IMG) throw new Error('Imagem muito grande (máx. 6 MB).');
   const mime = /^image\/(png|jpe?g|webp)$/i.test(att.contentType || '') ? att.contentType.split(';')[0] : 'image/png';
   const j = await gemini(buf.toString('base64'), mime);
-  return normTeams(j.teams);
+  const out = normTeams(warTeams(j.teams));
+  out.seen = (Array.isArray(j.teams) ? j.teams : []).map((t) => clean(t?.name, 30)).filter(Boolean).slice(0, 12);
+  return out;
 }
 
 /* ------------------------------ Visual ------------------------------ */
@@ -278,7 +294,10 @@ async function handleMessage(msg) {
     try {
       const teams = await readPrint(att);
       if (!teams.length) {
-        await msg.reply('❌ Não encontrei times de **Formações** nessa imagem. Envie o print da tela de Formações, inteiro e sem cortes.').catch(() => {});
+        const seen = teams.seen || [];
+        await msg.reply(seen.length
+          ? '❌ Não achei os times da guerra. Eles precisam se chamar **Time 1** a **Time 4** (ou **Ataque 1, Ataque 2, Defesa 3, Defesa 4**). Nomes que eu vi: ' + seen.join(', ') + '. Renomeie seus times no jogo e envie o print de novo.'
+          : '❌ Não encontrei times de **Formações** nessa imagem. Envie o print da tela de Formações, inteiro e sem cortes.').catch(() => {});
         await msg.react('❌').catch(() => {});
         return;
       }
@@ -365,7 +384,7 @@ const path = require('path');
 const fs = require('fs');
 const GUIA_PNG = path.join(__dirname, '..', 'assets', 'coaching-guia.png');
 const GUIA = fs.existsSync(GUIA_PNG) ? GUIA_PNG : path.join(__dirname, '..', 'assets', 'coaching-guia.jpg');
-const DEFAULT_WELCOME = 'Bem-vindo(a) ao seu canal de coaching, {member}! 🕴️ Aqui a liderança vai te orientar. Siga o passo a passo da imagem para montar seus times e depois envie o print da tela **Formações** no canal de formações.';
+const DEFAULT_WELCOME = 'Bem-vindo(a) ao seu canal de coaching, {member}! 🕴️ Aqui a liderança vai te orientar. Siga o passo a passo da imagem para montar seus times. Os 4 times da guerra devem se chamar **Time 1, Time 2, Time 3 e Time 4** (ou **Ataque 1, Ataque 2, Defesa 3 e Defesa 4**). Depois envie o print da tela **Formações** no canal de formações; se tiver mais de uma conta, escreva o nome da conta na mensagem do print.';
 
 // Quem recebe as boas-vindas: membros com permissão própria de ver o canal que não são da equipe nem bots.
 async function findNewMembers(ch, cfg) {
@@ -418,4 +437,4 @@ async function handleChannel(ch) {
   if (!r.sent && !/já foram|não está dentro|desligad|Esse não/.test(r.reason)) console.log('[coaching] boas-vindas não enviadas (#' + ch.name + '): ' + r.reason);
 }
 
-module.exports = { accountKey, captionOf, handleChannel, welcome, DEFAULT_WELCOME, handleMessage, handleInteraction, refreshTable, listMembers, saveMember, deleteMember, normTeams, normPower, powerValue, formatValue, readPrint, gemini, parseLine };
+module.exports = { warTeams, accountKey, captionOf, handleChannel, welcome, DEFAULT_WELCOME, handleMessage, handleInteraction, refreshTable, listMembers, saveMember, deleteMember, normTeams, normPower, powerValue, formatValue, readPrint, gemini, parseLine };
