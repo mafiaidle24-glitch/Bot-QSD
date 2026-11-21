@@ -3,7 +3,7 @@
 // análise e no painel. Pontos da defesa: cada time posicionado vale 25 (5 de base x multiplicador 5).
 const {
   EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle,
-  StringSelectMenuBuilder, MessageFlags,
+  StringSelectMenuBuilder, MessageFlags, SlashCommandBuilder, PermissionFlagsBits,
 } = require('discord.js');
 const cfgs = require('./config');
 const db = require('./db');
@@ -146,15 +146,17 @@ function state(gid) {
 }
 
 /* ------------------------------ Mensagens ------------------------------ */
-function phaseOf(c) {
+function phaseOf(c, gid) {
   if (c.phase === 'defesa' || c.phase === 'ataque') return c.phase;
+  const f = gid ? store(gid).forced : null; // fase aberta por comando/automação (vale por 30 h)
+  if (f && Date.now() - f.at < 30 * 3600e3) return f.phase;
   const d = new Date(Date.now() - 3 * 3600e3); // Fortaleza (UTC-3)
   const t = d.getUTCDay() * 24 + d.getUTCHours() + d.getUTCMinutes() / 60; // horas desde domingo 0h
   if (t >= 3 * 24 + 21 && t < 4 * 24 + 21) return 'defesa'; // quarta 21h -> quinta 21h
   if (t >= 4 * 24 + 21 && t < 5 * 24 + 21) return 'ataque'; // quinta 21h -> sexta 21h
   return 'fora';
 }
-const phaseName = (c) => ({ defesa: 'Dia da defesa', ataque: 'Dia da guerra (ataque)' }[phaseOf(c)] || 'Guerra');
+const phaseName = (c, gid) => ({ defesa: 'Dia da defesa', ataque: 'Dia da guerra (ataque)' }[phaseOf(c, gid)] || 'Guerra');
 
 function bldLine(b) {
   if (b.remaining === null) return '▫️ **' + b.label + '** — sem informação';
@@ -166,7 +168,7 @@ function announcePayload(gid) {
   const cfg = cfgs.getConfig(gid);
   const c = cfg.guerra;
   const st = state(gid);
-  const e = new EmbedBuilder().setColor(c.color).setTitle('⚔️ Guerra de gangues — ' + phaseName(c))
+  const e = new EmbedBuilder().setColor(c.color).setTitle('⚔️ Guerra de gangues — ' + phaseName(c, gid))
     .setDescription([
       '🛡️ **Defesa:** toque em **Defesa** e diga quantos times (0 a 4) você colocou.',
       '⚔️ **Ataque:** toque em **Ataque** e diga quantos ataques (0 a 2) você já fez.',
@@ -191,7 +193,7 @@ function analysisPayload(gid) {
   const head = ['**Defesa:** ' + st.teams + ' time(s) · **' + st.points + '** pontos · ' + st.full + ' membro(s) com 4/4', '**Ataque:** ' + st.attacks + ' ataque(s) feito(s) · ' + st.atkFull + ' membro(s) com 2/2'];
   if (st.diff !== null) head.push(st.diff === 0 ? '✅ Bate com o placar do jogo (' + st.gameTeams + ' times).' : '⚠️ O jogo diz **' + st.gameTeams + '** time(s); marcado: **' + st.teams + '** (diferença ' + (st.diff > 0 ? '+' : '') + st.diff + ').');
   head.push('', '**Prédios**', st.buildings.map(bldLine).join('\n'));
-  const e1 = new EmbedBuilder().setColor(c.color).setTitle('📊 Análise da guerra — ' + phaseName(c)).setDescription(head.join('\n').slice(0, 4000));
+  const e1 = new EmbedBuilder().setColor(c.color).setTitle('📊 Análise da guerra — ' + phaseName(c, gid)).setDescription(head.join('\n').slice(0, 4000));
   const lines = st.members.map((m, i) => '`' + String(i + 1).padStart(2, ' ') + '.` **' + m.name + '**' + (m.ok ? '' : ' ❔') + ' — 🛡️ ' + (m.def === null ? '?' : m.def) + '/4 · ⚔️ ' + (m.atk === null ? '?' : m.atk) + '/2' + (m.took.length ? ' · 🏢 ' + m.took.map((n) => '#' + n).join(' ') : '') + (m.editedAt ? ' ✏️' : ''));
   let desc = '', shown = 0;
   for (const l of lines) { if (desc.length + l.length + 1 > 3900) break; desc += l + '\n'; shown++; }
@@ -246,7 +248,7 @@ function mineEmbed(gid, uid) {
   const cfg = cfgs.getConfig(gid);
   const g = store(gid);
   const accs = accountsOf(g, uid);
-  const e = new EmbedBuilder().setColor(cfg.guerra.color).setTitle('📋 Minha ficha — ' + phaseName(cfg.guerra));
+  const e = new EmbedBuilder().setColor(cfg.guerra.color).setTitle('📋 Minha ficha — ' + phaseName(cfg.guerra, gid));
   if (!accs.length) return e.setDescription('Você ainda não cadastrou nenhuma conta do jogo. Toque em **Minhas contas**.');
   return e.setDescription(accs.map((a) => {
     const m = g.members[a.id] || {};
@@ -371,4 +373,101 @@ async function handleInteraction(i) {
   }
 }
 
-module.exports = { handleInteraction, refresh, schedule, state, setDef, setAtk, phaseOf, setBuilding, deleteMember, addAccount, removeAccount, updateAccount, MAX_ACCOUNTS, setGameTeams, reset, label, announcePayload, analysisPayload, PTS_TEAM };
+
+/* ------------------------------ Postagem automática e comandos ------------------------------ */
+// Janela da guerra em Fortaleza (UTC-3): quarta 21h -> quinta 21h = defesa; quinta 21h -> sexta 21h = ataque.
+// "wed" = data da quarta-feira daquela guerra (identifica a guerra, para não postar duas vezes).
+function windowNow() {
+  const d = new Date(Date.now() - 3 * 3600e3);
+  const dow = d.getUTCDay(), h = d.getUTCHours();
+  let phase = null;
+  if ((dow === 3 && h >= 21) || (dow === 4 && h < 21)) phase = 'defesa';
+  else if ((dow === 4 && h >= 21) || (dow === 5 && h < 21)) phase = 'ataque';
+  const wed = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - (dow - 3))).toISOString().slice(0, 10);
+  return { phase, wed };
+}
+
+const START_TEXT = {
+  defesa: '🛡️ **Começou o dia da defesa!** Toque em **Defesa** e diga quantos times (0 a 4) você colocou. Quem tem mais de uma conta cadastra em **Minhas contas**.',
+  ataque: '⚔️ **Começou o dia do ataque!** Toque em **Ataque** (0 a 2) e vá atualizando os prédios (#1 a #9) conforme a guerra anda.',
+};
+
+// Posta uma ficha NOVA no canal do anúncio (fixa a nova e tira os botões da antiga).
+// Defesa = guerra nova: limpa as marcações da anterior (as contas cadastradas ficam).
+async function launch(client, gid, phase, { clear = phase === 'defesa' } = {}) {
+  const c = cfgs.getConfig(gid).guerra;
+  if (!c.enabled) return { ok: false, reason: 'A ficha da guerra está desligada no painel (aba ⚔️ Guerra).' };
+  const ch = await chanOf(client, gid, c.announceChannelId);
+  if (!ch) return { ok: false, reason: 'Escolha o canal do anúncio da guerra no painel (aba ⚔️ Guerra).' };
+  if (clear) reset(gid);
+  const g = store(gid);
+  g.forced = { phase, at: Date.now() };
+  const w = windowNow();
+  if (w.phase === phase) { g.auto ??= {}; g.auto[phase === 'defesa' ? 'def' : 'atk'] = w.wed; } // já postada nesta guerra
+  db.save();
+  const old = c.announceMessageId ? await ch.messages.fetch(c.announceMessageId).catch(() => null) : null;
+  const payload = announcePayload(gid);
+  payload.content = START_TEXT[phase];
+  let msg;
+  try { msg = await ch.send(payload); }
+  catch (e) {
+    const perm = e?.code === 50013 || e?.code === 50001;
+    return { ok: false, reason: perm ? 'O bot não tem permissão para enviar mensagens nesse canal.' : (e?.message || 'erro ao enviar') };
+  }
+  cfgs.setGuerraMessage(gid, 'announce', msg.id);
+  await msg.pin().catch(() => {});
+  if (old && old.author.id === client.user.id) { // a ficha antiga fica como histórico, sem botões
+    await old.unpin().catch(() => {});
+    await old.edit({ components: [] }).catch(() => {});
+  }
+  try { await upsert(client, gid, 'analysis', analysisPayload(gid), { createIfMissing: true }); } catch (e) { warn('análise', e); }
+  return { ok: true, msg };
+}
+
+// Roda a cada minuto: quando chega a hora, posta a ficha da fase.
+async function tick(client) {
+  const w = windowNow();
+  for (const guild of client.guilds.cache.values()) {
+    try {
+      const gid = guild.id;
+      const c = cfgs.getConfig(gid).guerra;
+      const g = store(gid);
+      if (!g.auto) { // primeira vez: não repete uma fase que já estava em andamento antes de ligar a automação
+        g.auto = {};
+        if (w.phase) g.auto[w.phase === 'defesa' ? 'def' : 'atk'] = w.wed;
+        db.save();
+        continue;
+      }
+      if (!w.phase || !c.enabled || !c.auto || !c.announceChannelId) continue;
+      const k = w.phase === 'defesa' ? 'def' : 'atk';
+      if (g.auto[k] === w.wed) continue;
+      g.auto[k] = w.wed; db.save(); // marca antes: se falhar, não fica tentando toda hora
+      const r = await launch(client, gid, w.phase);
+      if (!r.ok) warn('postagem automática (' + w.phase + ')', new Error(r.reason));
+    } catch (e) { warn('tick', e); }
+  }
+}
+
+const commands = [
+  new SlashCommandBuilder().setName('guerra').setDescription('Posta a ficha da guerra no canal do anúncio (liderança)')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+    .addSubcommand((s) => s.setName('defesa').setDescription('Posta a ficha de DEFESA e começa uma guerra nova')
+      .addBooleanOption((o) => o.setName('limpar').setDescription('Limpar as marcações da guerra anterior (padrão: sim)')))
+    .addSubcommand((s) => s.setName('ataque').setDescription('Posta a ficha de ATAQUE (mantém as marcações da defesa)')),
+];
+
+async function handleSlash(i) {
+  if (i.commandName !== 'guerra') return false;
+  const c = cfgs.getConfig(i.guild.id).guerra;
+  const isStaff = i.memberPermissions?.has(PermissionFlagsBits.ManageGuild) || (c.staffRoleIds || []).some((r) => i.member?.roles?.cache?.has(r));
+  if (!isStaff) { await i.reply({ content: '🔒 Só a liderança pode usar este comando.', flags: EPHEMERAL }); return true; }
+  await i.deferReply({ flags: EPHEMERAL });
+  const sub = i.options.getSubcommand();
+  const clear = sub === 'defesa' ? i.options.getBoolean('limpar') !== false : false;
+  const r = await launch(i.client, i.guild.id, sub === 'defesa' ? 'defesa' : 'ataque', { clear });
+  if (!r.ok) { await i.editReply('❌ ' + r.reason); return true; }
+  await i.editReply('✅ Ficha de **' + (sub === 'defesa' ? 'defesa' : 'ataque') + '** postada: ' + r.msg.url + (clear ? '\n🧹 As marcações da guerra anterior foram limpas (as contas cadastradas continuam).' : ''));
+  return true;
+}
+
+module.exports = { commands, handleSlash, launch, tick, windowNow, handleInteraction, refresh, schedule, state, setDef, setAtk, phaseOf, setBuilding, deleteMember, addAccount, removeAccount, updateAccount, MAX_ACCOUNTS, setGameTeams, reset, label, announcePayload, analysisPayload, PTS_TEAM };
