@@ -398,7 +398,7 @@ function startWeb(bot) {
   }));
   app.put('/api/guilds/:id/coaching/members/:uid', requireAuth, guildAccess, wrap(async (req, res) => {
     const uid = String(req.params.uid);
-    if (!/^\d{5,25}$/.test(uid)) return res.status(400).json({ error: 'Membro inválido.' });
+    if (!/^\d{5,25}(_[a-z0-9]{1,12})?$/.test(uid)) return res.status(400).json({ error: 'Membro inválido.' });
     const teams = coaching.normTeams(req.body?.teams);
     if (!teams.length) return res.status(400).json({ error: 'Coloque pelo menos um time com o poder, por exemplo 407.5T.' });
     const old = coaching.listMembers(req.guild.id).find((m) => m.id === uid);

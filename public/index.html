@@ -670,12 +670,15 @@ function tabCoaching() {
     tbl.replaceChildren(members.map((m, i) => {
       const ta = h('textarea', { rows: Math.max(3, m.teams.length + 1), style: 'width:100%;font-family:monospace;font-size:12px' });
       ta.value = teamsText(m);
+      const nameIn = h('input', { type: 'text', maxlength: 40, value: m.name, style: 'width:100%;margin-bottom:8px' });
       const body = h('div', { style: 'display:none;margin-top:8px' },
+        h('div', { class: 'muted', style: 'font-size:12px;margin-bottom:4px' }, 'Nome da conta no jogo:'),
+        nameIn,
         h('div', { class: 'muted', style: 'font-size:12px;margin-bottom:4px' }, 'Uma linha por time: Nome | poder | capos (separados por vírgula). Apagar a linha remove o time.'),
         ta,
         h('div', { class: 'dbtns', style: 'margin-top:8px' },
           h('button', { class: 'btn green small', onclick: async () => {
-            try { const r = await api('/api/guilds/' + st.gid + '/coaching/members/' + m.id, { method: 'PUT', body: { name: m.name, teams: parse(ta.value) } }); members = r.members; toast('Corrigido!', 'ok'); draw(); } catch (e) { toast(e.message, 'err'); }
+            try { const r = await api('/api/guilds/' + st.gid + '/coaching/members/' + m.id, { method: 'PUT', body: { name: nameIn.value.trim() || m.name, teams: parse(ta.value) } }); members = r.members; toast('Corrigido!', 'ok'); draw(); } catch (e) { toast(e.message, 'err'); }
           } }, '💾 Salvar correção'),
           h('button', { class: 'btn danger small', onclick: async () => {
             if (!confirm('Descartar os dados de ' + m.name + '?')) return;

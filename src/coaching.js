@@ -62,8 +62,14 @@ function saveMember(gid, uid, name, teams, extra = {}) {
   const total = totalOf(teams);
   const hist = [...(old.hist || [])];
   if (!extra.edited && total > 0) hist.push({ at: Date.now(), total });
+  // nome: se a equipe já corrigiu o nome, um print novo não volta para o nome antigo
+  let nm, nameEdited = !!old.nameEdited;
+  if (extra.edited) { const n = clean(name, 40); nm = n || old.name || uid; if (old.name && n && n !== old.name) nameEdited = true; }
+  else if (old.nameEdited) nm = old.name;
+  else nm = clean(name, 40) || old.name || uid;
   g.members[uid] = {
-    name: clean(name, 40) || old.name || uid,
+    name: nm,
+    nameEdited,
     teams,
     total,
     at: extra.edited ? old.at || Date.now() : Date.now(),
@@ -73,6 +79,19 @@ function saveMember(gid, uid, name, teams, extra = {}) {
   };
   db.save();
   return g.members[uid];
+}
+// Quem tem mais de uma conta escreve o nome da conta junto com o print: cada conta vira um registro (chave "idDiscord_hash").
+const nkey = (n) => clean(n, 40).normalize('NFKC').toLowerCase().replace(/\s+/g, ' ');
+const hashOf = (n) => { let h = 7; for (const ch of nkey(n)) h = (h * 31 + ch.codePointAt(0)) >>> 0; return h.toString(36); };
+function accountKey(gid, uid, name) {
+  const g = store(gid);
+  const hit = Object.entries(g.members).find(([k, m]) => (k === uid || k.startsWith(uid + '_')) && nkey(m.name) === nkey(name));
+  return hit ? hit[0] : uid + '_' + hashOf(name);
+}
+// Nome da conta escrito na mensagem do print (curto, sem menções/links); vazio = usa o nome do Discord.
+function captionOf(msg) {
+  const t = String(msg.content || '').replace(/<[@#][!&]?\d+>|<a?:\w+:\d+>|https?:\/\/\S+/g, ' ').split('\n')[0].replace(/\s+/g, ' ').trim();
+  return t.length >= 2 && t.length <= 30 ? t : '';
 }
 const deleteMember = (gid, uid) => { const g = store(gid); const had = !!g.members[uid]; delete g.members[uid]; db.save(); return had; };
 const listMembers = (gid) => Object.entries(store(gid).members).map(([id, m]) => ({ id, ...m, totalText: formatValue(m.total) })).sort((a, b) => b.total - a.total);
@@ -191,7 +210,7 @@ function memberEmbed(cfg, uid, m, note) {
   for (const t of m.teams.slice(0, 8)) {
     e.addFields({ name: t.name + ' — ' + (t.power || '?'), value: t.capos.length ? t.capos.join(', ') : '—', inline: false });
   }
-  e.setFooter({ text: m.editedAt ? '✏️ Corrigido pela equipe' : '🤖 Lido por IA — se algo estiver errado, a equipe pode corrigir' });
+  e.setFooter({ text: m.editedAt || m.nameEdited ? '✏️ Corrigido pela equipe' : '🤖 Lido por IA — a equipe pode corrigir. Mais de uma conta? Escreva o nome da conta na mensagem do print.' });
   return e;
 }
 const buttons = (uid) => new ActionRowBuilder().addComponents(
@@ -264,9 +283,11 @@ async function handleMessage(msg) {
         return;
       }
       premium.consume(msg.guild.id, 'coachingDay');
-      const name = targetMember?.displayName || target.globalName || target.username;
-      const m = saveMember(msg.guild.id, target.id, name, teams, { src: msg.url });
-      await msg.reply({ embeds: [memberEmbed(cfg, target.id, m)], components: [buttons(target.id)], allowedMentions: { repliedUser: false } }).catch(() => {});
+      const cap = captionOf(msg);
+      const name = cap || targetMember?.displayName || target.globalName || target.username;
+      const key = cap ? accountKey(msg.guild.id, target.id, cap) : target.id;
+      const m = saveMember(msg.guild.id, key, name, teams, { src: msg.url });
+      await msg.reply({ embeds: [memberEmbed(cfg, key, m)], components: [buttons(key)], allowedMentions: { repliedUser: false } }).catch(() => {});
       await msg.react('✅').catch(() => {});
       refreshTable(msg.client, msg.guild.id);
     } catch (e) {
@@ -302,9 +323,11 @@ async function handleInteraction(i) {
       const m = store(i.guild.id).members[uid];
       if (!m) return i.reply({ content: 'Esse registro não existe mais.', flags: EPHEMERAL });
       const modal = new ModalBuilder().setCustomId('co:md:' + uid).setTitle(('Corrigir: ' + m.name).slice(0, 45));
-      const rows = m.teams.slice(0, 5).map((t, n) => new ActionRowBuilder().addComponents(
+      const nameRow = new ActionRowBuilder().addComponents(
+        new TextInputBuilder().setCustomId('nm').setLabel('Nome da conta no jogo').setStyle(TextInputStyle.Short).setRequired(true).setMinLength(2).setMaxLength(40).setValue(String(m.name || '').slice(0, 40)));
+      const rows = m.teams.slice(0, 4).map((t, n) => new ActionRowBuilder().addComponents(
         new TextInputBuilder().setCustomId('t' + n).setLabel('Time ' + (n + 1) + ' (Nome | poder | capos)').setStyle(TextInputStyle.Paragraph).setRequired(false).setMaxLength(400).setValue(teamLine(t).slice(0, 400))));
-      return i.showModal(modal.addComponents(...rows));
+      return i.showModal(modal.addComponents(nameRow, ...rows));
     }
     if (i.isButton() && act === 'rm') {
       deleteMember(i.guild.id, uid);
@@ -316,14 +339,17 @@ async function handleInteraction(i) {
       if (!m) return i.reply({ content: 'Esse registro não existe mais.', flags: EPHEMERAL });
       const teams = [];
       try {
-        for (let n = 0; n < 5; n++) {
+        for (let n = 0; n < 4; n++) {
           let v = '';
           try { v = i.fields.getTextInputValue('t' + n); } catch { continue; }
           const t = parseLine(v, n);
           if (t) teams.push(t);
         }
       } catch (e) { return i.reply({ content: '⚠️ ' + e.message, flags: EPHEMERAL }); }
-      const upd = saveMember(i.guild.id, uid, m.name, normTeams(teams), { edited: true });
+      let newName = m.name;
+      try { newName = i.fields.getTextInputValue('nm') || m.name; } catch { /* modal antigo, sem o campo de nome */ }
+      // do time 5 em diante a janela não mostra: esses continuam como estavam
+      const upd = saveMember(i.guild.id, uid, newName, normTeams([...teams, ...m.teams.slice(4)]), { edited: true });
       refreshTable(i.client, i.guild.id);
       const payload = { embeds: [memberEmbed(cfg, uid, upd)], components: [buttons(uid)] };
       return i.isFromMessage?.() ? i.update(payload) : i.reply({ ...payload, flags: EPHEMERAL });
@@ -392,4 +418,4 @@ async function handleChannel(ch) {
   if (!r.sent && !/já foram|não está dentro|desligad|Esse não/.test(r.reason)) console.log('[coaching] boas-vindas não enviadas (#' + ch.name + '): ' + r.reason);
 }
 
-module.exports = { handleChannel, welcome, DEFAULT_WELCOME, handleMessage, handleInteraction, refreshTable, listMembers, saveMember, deleteMember, normTeams, normPower, powerValue, formatValue, readPrint, gemini, parseLine };
+module.exports = { accountKey, captionOf, handleChannel, welcome, DEFAULT_WELCOME, handleMessage, handleInteraction, refreshTable, listMembers, saveMember, deleteMember, normTeams, normPower, powerValue, formatValue, readPrint, gemini, parseLine };
