@@ -1,4 +1,5 @@
 // Painel web: login com Discord (OAuth2) + API de configuração.
+const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const express = require('express');
@@ -591,6 +592,32 @@ function startWeb(bot) {
   // Página inicial: visitantes veem o site; quem já entrou vai direto ao painel. O painel também fica em /painel.
   const pubDir = path.join(__dirname, '..', 'public');
   app.get('/', (req, res) => res.sendFile(path.join(pubDir, req.session.user ? 'index.html' : 'site.html')));
+  // Termos e Política de Privacidade (os arquivos .md da raiz viram páginas simples)
+  const esc = (t) => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const inline = (t) => esc(t).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/\*(.+?)\*/g, '<i>$1</i>');
+  const mdToHtml = (md) => {
+    const out = []; let list = false;
+    for (const raw of md.split('\n')) {
+      const l = raw.trimEnd();
+      const li = /^[*-]\s+(.*)$/.exec(l);
+      if (li) { if (!list) { out.push('<ul>'); list = true; } out.push('<li>' + inline(li[1]) + '</li>'); continue; }
+      if (list) { out.push('</ul>'); list = false; }
+      if (!l.trim()) continue;
+      if (/^---+$/.test(l)) out.push('<hr>');
+      else if (/^##\s+/.test(l)) out.push('<h2>' + inline(l.replace(/^##\s+/, '')) + '</h2>');
+      else if (/^#\s+/.test(l)) out.push('<h1>' + inline(l.replace(/^#\s+/, '')) + '</h1>');
+      else out.push('<p>' + inline(l) + '</p>');
+    }
+    if (list) out.push('</ul>');
+    return out.join('\n');
+  };
+  const legalPage = (file, title) => (req, res) => {
+    let md = '';
+    try { md = fs.readFileSync(path.join(__dirname, '..', file), 'utf8'); } catch { return res.status(404).send('Página não encontrada.'); }
+    res.type('html').send('<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>' + esc(title) + '</title><style>:root{color-scheme:dark light}body{margin:0;background:#2b2d31;color:#f2f3f5;font:16px/1.65 "Segoe UI",system-ui,sans-serif}@media(prefers-color-scheme:light){body{background:#f4f5f7;color:#1d1f24}}main{max-width:760px;margin:0 auto;padding:24px 18px 60px}h1{font-size:28px}h2{font-size:20px;margin-top:28px}a{color:#8ea1ff}hr{border:0;border-top:1px solid #8886}</style></head><body><main><p><a href="/">← Voltar ao site</a></p>' + mdToHtml(md) + '</main></body></html>');
+  };
+  app.get('/termos', legalPage('termos.md', 'Termos de Uso — BOT QSD'));
+  app.get('/privacidade', legalPage('privacidade.md', 'Política de Privacidade — BOT QSD'));
   app.get('/painel', (req, res) => res.sendFile(path.join(pubDir, 'index.html')));
 
   app.use('/api', (req, res) => res.status(404).json({ error: 'Rota não encontrada.' }));

@@ -3,8 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>BOT QSD — bot multifuncional para Discord</title>
-<meta name="description" content="Bot de Discord em português: boas-vindas com cartão, tickets, Telefone Vermelho, moderação, níveis, cargos, alertas de YouTube/Twitch/Kick, estatísticas, mini jogos e RPG da máfia.">
+<title>BOT QSD — bot em português para Discord e gangues do Idle Mafia</title>
+<meta name="description" content="Bot de Discord em português com painel fácil: tickets, moderação, níveis, alertas e ferramentas para gangues do Idle Mafia (coaching por print, ficha de guerra e ranking de pontos semanais).">
+<meta property="og:type" content="website">
+<meta property="og:title" content="BOT QSD — bot em português para Discord e gangues do Idle Mafia">
+<meta property="og:description" content="Tudo pelo painel, sem comandos difíceis. Coaching por print, ficha de guerra e ranking semanal para a sua gangue do Idle Mafia.">
+<meta property="og:image" content="/og.png">
+<meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#1e1f22">
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" type="image/png" href="/icon-192.png">
@@ -57,6 +62,19 @@ section.box>p{color:var(--muted);margin:0 auto;max-width:640px}
 .price small{font-size:15px;font-weight:500;color:var(--muted)}
 .ok{display:inline-block;width:10px;height:10px;border-radius:50%;background:#3ba55d;margin-right:6px}
 .bad{background:#ed4245}
+section.mafia{border:2px solid #e67e22;background:linear-gradient(180deg,rgba(230,126,34,.12),transparent 60%),var(--card)}
+.tag{display:inline-block;background:#e67e22;color:#1b1206;font-weight:800;font-size:12px;letter-spacing:.5px;border-radius:999px;padding:3px 12px;margin-bottom:10px}
+.feat{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-top:18px;text-align:left}
+.feat div{background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+.feat h3{margin:0 0 6px;font-size:17px}
+.feat p{margin:0;color:var(--muted);font-size:14px}
+.steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-top:18px;text-align:left}
+.steps div{background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+.steps b.n{display:inline-grid;place-items:center;width:28px;height:28px;border-radius:50%;background:var(--blue);color:#fff;margin-bottom:6px}
+.faq{max-width:640px;margin:16px auto 0;text-align:left}
+.faq details{border-bottom:1px solid var(--line);padding:10px 0}
+.faq summary{cursor:pointer;font-weight:600}
+.faq p{margin:8px 0 0;color:var(--muted);font-size:15px}
 footer{text-align:center;color:var(--muted);font-size:13px;padding:26px 16px 50px}
 @media(max-width:520px){.hero h1{font-size:38px}}
 </style>
@@ -71,8 +89,11 @@ footer{text-align:center;color:var(--muted);font-size:13px;padding:26px 16px 50p
   <a href="/painel">Painel</a>
   <a id="mInvite" href="#">Convide-me</a>
   <a id="mSupport" href="#">Entre no Meu Servidor</a>
+  <a href="#idlemafia">🕴️ Idle Mafia (gangues)</a>
+  <a href="#comecar">Como começar</a>
   <a href="#status">Status</a>
   <a href="#comandos">Comandos</a>
+  <a href="#faq">Perguntas frequentes</a>
   <details>
     <summary>Funcionalidades</summary>
     <a href="#boasvindas">Boas-vindas</a>
@@ -90,10 +111,11 @@ footer{text-align:center;color:var(--muted);font-size:13px;padding:26px 16px 50p
 <section class="hero">
   <img class="av" id="avatar" src="/icon-512.png" alt="">
   <h1 id="hname">BOT QSD</h1>
-  <p>Um bot multifuncional e configurável para o seu Discord, em português — tudo pelo painel, sem precisar de comandos.</p>
+  <p>O bot em português para o seu Discord: tickets, moderação, níveis, alertas e mais, tudo pelo painel, sem comandos difíceis. E ferramentas feitas para <b>gangues do Idle Mafia</b>.</p>
   <div class="btns">
     <a class="btn" id="bInvite" href="#">➕ Adicionar ao Discord</a>
     <a class="btn main" href="/painel">⚙️ Configurar Servidores</a>
+    <a class="btn" href="#idlemafia">🕴️ Para gangues do Idle Mafia</a>
   </div>
   <div class="stats">
     <div><b id="sServers">—</b>servidores</div>
@@ -102,6 +124,30 @@ footer{text-align:center;color:var(--muted);font-size:13px;padding:26px 16px 50p
 </section>
 
 <main>
+  <section class="box mafia" id="idlemafia">
+    <span class="tag">NOVO · IDLE MAFIA</span>
+    <h2>🕴️ Ferramentas para a sua gangue</h2>
+    <p>Chega de planilha e de cobrar print no grupo. Os membros enviam ou marcam tudo no Discord e a liderança acompanha e corrige pelo painel.</p>
+    <div class="feat">
+      <div><h3>🕴️ Coaching por print</h3><p>O membro posta o print das <b>Formações</b>; a IA lê os 4 times da guerra e o poder, e o bot mantém uma tabela sempre atualizada. Cada canal novo de coaching recebe boas-vindas com o passo a passo em imagem.</p></div>
+      <div><h3>⚔️ Ficha da guerra</h3><p>Ficha de <b>defesa</b> e de <b>ataque</b> com botões: times colocados, ataques e os 9 prédios (#1 a #9) com quantas equipes faltam. Aceita várias contas por pessoa e posta sozinha na quarta e na quinta, às 21h.</p></div>
+      <div><h3>🏆 Pontos semanais</h3><p>A liderança envia os prints da tela da gangue e o bot gera um <b>ranking em imagem</b>, com pontos, cargo, rank da rua e a barra de meta de cada membro.</p></div>
+      <div><h3>📖 Wiki de Capos</h3><p>Publique a lista de Capos com imagens no canal que você escolher, organizada e fácil de atualizar.</p></div>
+    </div>
+    <div class="chips"><span>Leitura por IA (Gemini)</span><span>Correção pela liderança</span><span>Várias contas por membro</span><span>Comando /guerra</span></div>
+    <p style="margin-top:14px;font-size:13px">A leitura por IA pode errar: a liderança confere e corrige pelo painel. Não afiliado ao Idle Mafia nem à Century Games.</p>
+  </section>
+
+  <section class="box" id="comecar">
+    <h2>🚀 Como começar</h2>
+    <div class="steps">
+      <div><b class="n">1</b><br><b>Adicione o bot</b><br><span style="color:var(--muted);font-size:14px">Toque em "Adicionar ao Discord" e escolha o seu servidor.</span></div>
+      <div><b class="n">2</b><br><b>Entre no painel</b><br><span style="color:var(--muted);font-size:14px">Faça login com o Discord e abra o seu servidor.</span></div>
+      <div><b class="n">3</b><br><b>Ligue o que quiser</b><br><span style="color:var(--muted);font-size:14px">Escolha os canais e ative cada função. Não precisa programar.</span></div>
+    </div>
+    <div class="btns" style="margin-top:18px"><a class="btn main" id="bInvite3" href="#">➕ Adicionar ao Discord</a></div>
+  </section>
+
   <section class="box" id="boasvindas">
     <h2>👋 Boas-vindas e saída</h2>
     <p>Mensagens de boas-vindas, saída e expulsão com cartões personalizados: texto, imagem de fundo, cores e título do seu jeito. Também entrega cargos automáticos para quem entra.</p>
@@ -175,8 +221,19 @@ footer{text-align:center;color:var(--muted);font-size:13px;padding:26px 16px 50p
     <ul class="perks" id="perks"></ul>
     <div class="btns" style="margin-top:18px"><a class="btn main" href="/painel">💎 Assinar pelo painel</a><a class="btn" id="bSupport2" href="#">Falar com o suporte</a></div>
   </section>
+
+  <section class="box" id="faq">
+    <h2>❓ Perguntas frequentes</h2>
+    <div class="faq">
+      <details><summary>É grátis?</summary><p>Existe um plano grátis com limites e um plano Premium que libera mais recursos e limites maiores. Os preços estão na seção Premium.</p></details>
+      <details><summary>Preciso saber programar?</summary><p>Não. Tudo é configurado no painel, com login do Discord, em português.</p></details>
+      <details><summary>Como a IA lê os prints?</summary><p>O print enviado no canal configurado é lido por IA (Google Gemini). O bot guarda só os números e nomes lidos, e a liderança pode corrigir qualquer erro pelo painel ou pelo botão Corrigir.</p></details>
+      <details><summary>Dá para ter mais de uma conta do jogo por membro?</summary><p>Sim. Basta escrever o nome da conta na mensagem do print, e na ficha da guerra o membro cadastra as contas dele.</p></details>
+      <details><summary>E os meus dados?</summary><p>Leia os <a href="/termos">Termos de Uso</a> e a <a href="/privacidade">Política de Privacidade</a>. Para apagar os dados do servidor, remova o bot ou fale com o suporte.</p></details>
+    </div>
+  </section>
 </main>
-<footer>© BOT QSD · Feito para comunidades de Discord · <a href="/painel">Painel</a></footer>
+<footer>© BOT QSD · Feito para comunidades de Discord · <a href="/painel">Painel</a> · <a href="/termos">Termos</a> · <a href="/privacidade">Privacidade</a></footer>
 
 <script>
 (function () {
@@ -201,7 +258,7 @@ footer{text-align:center;color:var(--muted);font-size:13px;padding:26px 16px 50p
     $('#bname').textContent = d.name; $('#hname').textContent = d.name;
     $('#avatar').src = d.avatar; $('#logo').src = d.avatar;
     $('#sServers').textContent = d.servers.toLocaleString('pt-BR'); $('#sMembers').textContent = d.members.toLocaleString('pt-BR');
-    ['#mInvite', '#bInvite'].forEach(function (s) { $(s).href = d.invite; });
+    ['#mInvite', '#bInvite', '#bInvite3'].forEach(function (s) { $(s).href = d.invite; });
     ['#mSupport', '#bSupport2'].forEach(function (s) { $(s).href = d.support; });
     $('#stText').textContent = 'Online e funcionando'; $('#stPing').textContent = d.ping + ' ms'; $('#stUp').textContent = fmtUp(d.uptime);
     $('#price').innerHTML = '';
