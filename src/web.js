@@ -564,7 +564,7 @@ function startWeb(bot) {
   });
 
   // Dados públicos para a página inicial do site (sem login, nada sensível)
-  app.get('/api/public', (req, res) => {
+  const publicInvite = () => {
     const perms = new PermissionsBitField([
       PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.EmbedLinks,
       PermissionFlagsBits.AttachFiles, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.AddReactions,
@@ -573,6 +573,13 @@ function startWeb(bot) {
       PermissionFlagsBits.ManageGuildExpressions,
     ]).bitfield;
     const q = new URLSearchParams({ client_id: CLIENT_ID, permissions: String(perms), scope: 'bot applications.commands' });
+    return 'https://discord.com/oauth2/authorize?' + q;
+  };
+  const supportLink = () => process.env.SUPPORT_URL || pix.SUPPORT;
+  // Atalhos curtos para divulgação: /convite adiciona o bot, /suporte entra no servidor de suporte
+  app.get('/convite', (req, res) => res.redirect(publicInvite()));
+  app.get('/suporte', (req, res) => res.redirect(supportLink()));
+  app.get('/api/public', (req, res) => {
     res.json({
       name: client.user.username,
       avatar: client.user.displayAvatarURL({ size: 256, extension: 'png' }),
@@ -580,8 +587,8 @@ function startWeb(bot) {
       members: client.guilds.cache.reduce((n, g) => n + (g.memberCount || 0), 0),
       ping: Math.round(client.ws.ping),
       uptime: Math.round(process.uptime()),
-      invite: 'https://discord.com/oauth2/authorize?' + q,
-      support: process.env.SUPPORT_URL || pix.SUPPORT,
+      invite: publicInvite(),
+      support: supportLink(),
       price: premium.price(),
       promo: premium.promo(),
       days: premium.planDays(),
